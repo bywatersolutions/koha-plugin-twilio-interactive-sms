@@ -40,8 +40,6 @@ our $metadata = {
     description     => 'This plugin enables patrons to send sms messages to Koha and recieve responses.',
 };
 
-## This is the minimum code required for a plugin's 'new' method
-## More can be added, but none should be removed
 sub new {
     my ( $class, $args ) = @_;
 
@@ -57,73 +55,51 @@ sub new {
     return $self;
 }
 
-## If your tool is complicated enough to needs it's own setting/configuration
-## you will want to add a 'configure' method to your plugin like so.
-## Here I am throwing all the logic into the 'configure' method, but it could
-## be split up like the 'report' method is.
 sub configure {
-    my ( $self, $args ) = @_;
+    my ($self, $args) = @_;
     my $cgi = $self->{'cgi'};
 
-    unless ( $cgi->param('save') ) {
-        my $template = $self->get_template({ file => 'configure.tt' });
+    unless ($cgi->param('save')) {
+        my $template = $self->get_template({file => 'configure.tt'});
 
         ## Grab the values we already have for our settings, if any exist
         $template->param(
-            enable_opac_payments => $self->retrieve_data('enable_opac_payments'),
-            foo             => $self->retrieve_data('foo'),
-            bar             => $self->retrieve_data('bar'),
-            last_upgraded   => $self->retrieve_data('last_upgraded'),
+            AccountSid               => $self->retrieve_data('AccountSid'),
+            AuthToken                => $self->retrieve_data('AuthToken'),
+            From                     => $self->retrieve_data('From'),
+            WebhookAuthToken         => $self->retrieve_data('WebhookAuthToken'),
         );
 
-        $self->output_html( $template->output() );
+        $self->output_html($template->output());
     }
     else {
-        $self->store_data(
-            {
-                enable_opac_payments => $cgi->param('enable_opac_payments'),
-                foo                => $cgi->param('foo'),
-                bar                => $cgi->param('bar'),
-                last_configured_by => C4::Context->userenv->{'number'},
-            }
-        );
+        $self->store_data({
+            AccountSid               => $cgi->param('AccountSid'),
+            AuthToken                => $cgi->param('AuthToken'),
+            From                     => $cgi->param('From'),
+            WebhookAuthToken         => $cgi->param('WebhookAuthToken'),
+        });
         $self->go_home();
     }
 }
 
-## This is the 'install' method. Any database tables or other setup that should
-## be done when the plugin if first installed should be executed in this method.
-## The installation method should always return true if the installation succeeded
-## or false if it failed.
 sub install() {
     my ( $self, $args ) = @_;
 
     return 1;
 }
 
-## This is the 'upgrade' method. It will be triggered when a newer version of a
-## plugin is installed over an existing older version of a plugin
 sub upgrade {
     my ( $self, $args ) = @_;
 
     return 1;
 }
 
-## This method will be run just before the plugin files are deleted
-## when a plugin is uninstalled. It is good practice to clean up
-## after ourselves!
 sub uninstall() {
     my ( $self, $args ) = @_;
 
     return 1;
 }
-
-## API methods
-# If your plugin implements API routes, then the 'api_routes' method needs
-# to be implemented, returning valid OpenAPI 2.0 paths serialized as a hashref.
-# It is a good practice to actually write OpenAPI 2.0 path specs in JSON on the
-# plugin and read it here. This allows to use the spec for mainline Koha later,
-# thus making this a good prototyping tool.
 
 sub api_routes {
     my ( $self, $args ) = @_;

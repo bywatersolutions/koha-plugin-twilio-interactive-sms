@@ -19,25 +19,74 @@ use Modern::Perl;
 
 use Mojo::Base 'Mojolicious::Controller';
 
+use Data::Dumper;
+use HTTP::Request::Common;
+use LWP::UserAgent;
+use Mojo::JSON qw(decode_json);
+
 =head1 API
 
 =head2 Class Methods
 
-=head3 Method that bothers the patron, with no side effects
+=head3 Method to handle incoming SMS webhooks from Twilio
 
 =cut
 
-sub bother {
+sub webhook {
     my $c = shift->openapi->valid_input or return;
 
-    my $patron_id = $c->validation->param('patron_id');
-    my $patron    = Koha::Patrons->find($patron_id);
+    my $params = $c->req->params->to_hash;
+    warn "PARAMS: " . Data::Dumper::Dumper( $c->req->params->to_hash );
+    my $To       = $params->{From};   # Weird but less confusing in the long run
+    my $incoming = $params->{Body};   # We are respnding *To* the *From* number
 
-    unless ($patron) {
-        return $c->render( status => 404, openapi => { error => "Patron not found." } );
+    my $token = $c->validation->param('token');
+    warn "TOKEN: $token";
+
+    my $plugin = Koha::Plugin::Com::ByWaterSolutions::TwilioSMS->new();
+
+    my $WebhookAuthToken = $plugin->retrieve_data('WebhookAuthToken');
+    my $AccountSid       = $plugin->retrieve_data('AccountSid');
+    my $AuthToken        = $plugin->retrieve_data('AuthToken');
+    my $From             = $plugin->retrieve_data('From');
+
+    warn "STORED: $WebhookAuthToken";
+
+    unless ( $token eq $WebhookAuthToken ) {
+        return $c->render(
+            status  => 401,
+            openapi => { error => "Invalid token" }
+        );
     }
 
-    return $c->render( status => 200, openapi => { bothered => Mojo::JSON->true } );
+#    unless ($patron) {
+#        return $c->render( status => 404, openapi => { error => "Patron not found." } );
+#    }
+
+    my $outgoing = "This is a much more\ncomplex response";
+
+    my $ua = LWP::UserAgent->new;
+    my $url =
+      "https://api.twilio.com/2010-04-01/Accounts/$AccountSid/Messages.json";
+    my $request = POST $url,
+      [
+        From => $From,
+        To   => $To,
+        Body => $outgoing,
+      ];
+    $request->authorization_basic( $AccountSid, $AuthToken );
+    my $response = $ua->request($request);
+
+    if ( $response->is_success ) {
+        warn "RESPONSE: " . $response->decoded_content;
+    } else {
+        warn "Twilio response indicates failure: " . $response->status_line;
+    } 
+
+    return $c->render(
+        status  => 200,
+        openapi => { bothered => Mojo::JSON->true }
+    );
 }
 
 1;

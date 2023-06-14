@@ -1,78 +1,64 @@
+[% SET footerjs = 1 %]
 [% USE KohaDates %]
 [% INCLUDE 'doc-head-open.inc' %]
- <title>Koha: Twilio SMS Plugin: Configuration</title>
+ <title>Koha: Twilio Voice Plugin: Configuration</title>
 [% INCLUDE 'doc-head-close.inc' %]
 </head>
 <body>
 [% INCLUDE 'header.inc' %]
 [% INCLUDE 'cat-search.inc' %]
 
-<div id="breadcrumbs"><a href="/cgi-bin/koha/mainpage.pl">Home</a> &rsaquo; <a href="/cgi-bin/koha/plugins/plugins-home.pl">Plugins</a> &rsaquo; Twilio SMS &rsaquo; Configuration</div>
+<div id="breadcrumbs"><a href="/cgi-bin/koha/mainpage.pl">Home</a> &rsaquo; <a href="/cgi-bin/koha/plugins/plugins-home.pl">Plugins</a> &rsaquo; Twilio Voice &rsaquo; Configuration</div>
 
 <div id="doc3">
-    <!-- We can access our own plugins resource files using the PLUGIN_PATH variable. -->
-    <img src="[% PLUGIN_PATH %]/logo.png" />
-    <h3>Koha: Twilio SMS Plugin: Configuration</h3>
-
-    <!-- Notice our form here has no 'action', this is good, it means that our forms will always get passed back to 'plugins/run.pl'. You could hard code it instead if you prefer -->
     <form method="get">
         <!-- Always pass these two parameters so the plugin system knows what to execute! -->
         <input type="hidden" name="class" value="[% CLASS %]"/>
         <input type="hidden" name="method" value="[% METHOD %]"/>
-
-        <label for="foo">Parameter 'foo': </label>
-        <select name="foo">
-            [% IF foo == 'A' %]
-                <option value="A" selected="selected">Option A</option>
-            [% ELSE %]
-                <option value="A">Option A</option>
-            [% END %]
-
-            [% IF foo == 'B' %]
-                <option value="B" selected="selected">Option B</option>
-            [% ELSE %]
-                <option value="B">Option B</option>
-            [% END %]
-        </select>
-
-        <p>
-
-        <label for="bar">Parameter 'bar': </label>
-        <input type="text" name="bar" value="[% bar %]" />
-
-        <p>
-
-        <label for="enable_opac_payments">Enable OPAC Account Payments: </label>
-        <select name="enable_opac_payments">
-            [% IF enable_opac_payments == 'No' %]
-                <option value="No" selected="selected">No</option>
-            [% ELSE %]
-                <option value="No">No</option>
-            [% END %]
-
-            [% IF enable_opac_payments == 'Yes' %]
-                <option value="Yes" selected="selected">Yes</option>
-            [% ELSE %]
-                <option value="Yes">Yes</option>
-            [% END %]
-        </select>
-
-        <p>
-
         <input type="hidden" name="save" value="1" />
 
-        <input type="submit" value="Save configuration" />
+		<fieldset>
+			<legend>Configuration</legend>
+
+			<div class="form-group">
+				<label for="AccountSid">Account SID:</label>
+				<input type="text" class="form-control" name="AccountSid" value="[% AccountSid %]"/>
+			</div>
+
+			<div class="form-group">
+				<label for="AuthToken">Auth Token:</label>
+				<input type="text" class="form-control" name="AuthToken" value="[% AuthToken %]"/>
+			</div>
+
+			<div class="form-group">
+				<label for="From">From Phone Number:</label>
+				<input type="text" class="form-control" name="From" value="[% From %]"/>
+				<div class="hint">Any phone number you specify here must be a Twilio phone number (you can purchase a number through the console) or a verified outgoing caller id for your account.</div>
+			</div>
+
+			<div class="form-group">
+				<label for="WebhookAuthToken">Webhook Auth Token:</label>
+				<input type="text" class="form-control" name="WebhookAuthToken" id="WebhookAuthToken" value="[% WebhookAuthToken %]"/>
+                <div class="hint">You will add this token to the HTTP POST Webhook URL you configure within Twilio.</div>
+                <div class="hint">Copy and past the following URL into the "Messaging Configuration" setting "URL": https://your.koha.org/api/v1/contrib/twiliosms/webhook/<span id="token">[% WebhookAuthToken | html %]</span></div>
+                <div class="hint">Set "Configure with" to "Webhook, TwiML Bin, Function, Studio Flow, Proxy Service". Set "A message comes in" to "Webhook". Set "HTTP" to "HTTP POST".
+                <div class="hint">In your account in Twilio, choose Phone Numbers / Manage / Active Numbers to find these settings</div>
+			</div>
+		</fieldset>
+
+        <button type="submit" class="btn btn-default">Submit</button>
+
     </form>
 
-    <hr/>
-
-    <p>
-        <h5>Upgrade status</h5>
-        [% IF last_upgraded %]
-            Plugin was last upgraded on this system on [% last_upgraded | $KohaDates with_hours => 1 %]
-        [% ELSE %]
-            Plugin has never been upgraded.
-        [% END %]
-    </p>
+    [% MACRO jsinclude BLOCK %]
+        [% INCLUDE 'calendar.inc' %]
+        <script>
+            $(document).ready(function() {
+              $('#WebhookAuthToken').on("change", function(){
+                  $('#token').html( $('#WebhookAuthToken').val());
+              });
+            });
+        </script>
+    [% END %]
 
 [% INCLUDE 'intranet-bottom.inc' %]
