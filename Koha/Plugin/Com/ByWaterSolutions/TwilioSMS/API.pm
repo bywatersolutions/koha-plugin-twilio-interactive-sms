@@ -59,6 +59,8 @@ sub webhook {
     my $body = $params->{Body};
     my $from = $params->{From};
 
+    warn qq{"$body" FROM $from};
+
     my $patron;
 
     # Look for exact match first
@@ -84,6 +86,15 @@ sub webhook {
     }
     elsif ( $body =~ m/^HELP\s*ME/i ) {
         $code = "TWILIO_HELP";
+    }
+    elsif ( $body =~ m/^MY\s*ITEMS/i ) {
+        $code = "TWILIO_CHECKOUTS_CUR";
+    }
+    elsif ( $body =~ m/^OL/i ) {
+        $code = "TWILIO_CHECKOUTS_OD";
+    }
+    elsif ( $body =~ m/^HL/i ) {
+        $code = "TWILIO_HOLDS_WAITING";
     }
     else {
         $code = "TWILIO_NO_CMD";
