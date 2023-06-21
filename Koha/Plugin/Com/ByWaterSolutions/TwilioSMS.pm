@@ -86,6 +86,81 @@ sub configure {
 sub install() {
     my ( $self, $args ) = @_;
 
+    my $sql = q{
+INSERT IGNORE INTO `letter`
+VALUES      (93,
+             'circulation',
+             'TWILIO_CHECKOUTS_CUR',
+             '',
+             'Twilio Checkouts - Current',
+             0,
+             'Twilio Checkouts - Current',
+'[% USE KohaDates %]\r\n[%- SET checkouts = borrower.pending_checkouts %]\r\n[% IF checkouts.count %]\r\n  You have the following items checked out:\r\n  [%- FOREACH c IN borrower.pending_checkouts %]\r\n    [% c.item.barcode %] : [% c.item.biblio.title %] due [% c.date_due | $KohaDates %]\r\n  [% END %]\r\n[% ELSE %]\r\n  You have nothing checked out.\r\n[% END %]'
+             ,
+'sms',
+'default',
+'2023-06-21 17:22:04'),
+            (94,
+             'circulation',
+             'TWILIO_TEST',
+             '',
+             'Twilio Test',
+             0,
+             'Twilio Test',
+'[%- IF borrower %]\r\nYour libray has an account associated with this phone number!\r\n[%- ELSE %]\r\nYour libray has no account associated with this phone number!\r\n[%- END %]'
+             ,
+'sms',
+'default',
+'2023-06-21 16:39:42'),
+            (95,
+             'circulation',
+             'TWILIO_NO_CMD',
+             '',
+             'Twilio - Command Not Found',
+             0,
+             'Twilio - Command Not Found',
+'I didn\'t understand your command. Send \'HELP ME\' for a list of commands.',
+'sms',
+'default',
+'2023-06-21 16:56:58'),
+            (96,
+             'circulation',
+             'TWILIO_HELP',
+             '',
+             'Twilio - Help',
+             0,
+             'Twilio - Help',
+'You can send the following commands:\r\nMYITEMS - A list of items you have checked out.\r\nOL - A list of overdue items you have checked out.\r\nHL - A list of requested items waiting for pickup.\r\nTEST - Will let you know if you have an account associated with this number or not.\r\nHELPME - This help text.'
+             ,
+'sms',
+'default',
+'2023-06-21 17:40:10'),
+            (97,
+             'circulation',
+             'TWILIO_CHECKOUTS_OD',
+             '',
+             'Twilio Checkouts - Overdue',
+             0,
+             'Twilio Checkouts - Overdue',
+'[% USE KohaDates %]\r\n[%- SET checkouts = borrower.overdues %]\r\n[% IF checkouts.count %]\r\n  You have the following overdue items checked out:\r\n  [%- FOREACH c IN borrower.pending_checkouts %]\r\n    [% c.item.barcode %] : [% c.item.biblio.title %] due [% c.date_due | $KohaDates %]\r\n  [% END %]\r\n[% ELSE %]\r\n  You have no overdue items checked out.\r\n[% END %]'
+             ,
+'sms',
+'default',
+'2023-06-21 17:26:00'),
+            (98,
+             'circulation',
+             'TWILIO_HOLDS_WAITING',
+             '',
+             'Twilio Holds Waiting',
+             0,
+             'Twilio Holds Waiting',
+'[%- SET has_waiting_holds = 0 %]\r\n[%- SET holds = borrower.holds %]\r\n[%- FOREACH h IN holds %][% IF h.is_waiting%][% SET has_waiting_holds = 1 %][% END %][% END %]\r\n[%- IF has_waiting_holds %]\r\n  You have have the following items waiting:\r\n  [% h.biblio.title %] is waiting at [% h.branch.branchname %]\r\n[%- ELSE %]\r\n  You have no waiting holds.\r\n[% END %] '
+             ,
+'sms',
+'default',
+'2023-06-21 17:38:49');  
+};
+
     return 1;
 }
 
