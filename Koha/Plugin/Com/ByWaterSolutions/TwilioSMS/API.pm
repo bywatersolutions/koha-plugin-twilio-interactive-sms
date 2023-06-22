@@ -24,6 +24,8 @@ use HTTP::Request::Common;
 use LWP::UserAgent;
 use Mojo::JSON qw(decode_json);
 
+use C4::Circulation qw(CanBookBeRenewed AddRenewal _GetCircControlBranch);
+
 =head1 API
 
 =head2 Class Methods
@@ -81,6 +83,8 @@ sub webhook {
     my $tables = {};
     $tables->{borrowers} = $patron->id if $patron;
 
+    my $objects = {};
+
     if ( !$patron || $body =~ m/^TEST/i ) {
         $code = "TWILIO_TEST";
     }
@@ -96,6 +100,67 @@ sub webhook {
     elsif ( $body =~ m/^HL/i ) {
         $code = "TWILIO_HOLDS_WAITING";
     }
+    elsif ( $body =~ m/^R (\S+)/i ) {
+        $code = "TWILIO_RENEW_ONE";
+        my $barcode = $1;
+        my $item = Koha::Items->find({ barcode => $barcode });
+        $objects->{item} = $item;
+        if ( $item ) {
+            my ( $can, $reason ) = CanBookBeRenewed( $patron, $item->checkout );
+            $objects->{can_renew} = $can;
+            $objects->{cannot_renew_reason} = $reason;
+
+            if ( $can ) {
+                my $due_date = AddRenewal( $patron->id, $item->id, _GetCircControlBranch( $item->unblessed, $patron->unblessed ) );
+                $objects->{renewal_due_date} = $due_date;
+            }
+        }
+    }
+    elsif ( $body =~ m/^RA/i ) { # Handle both "Renew All" and "Renew All Overdue"
+        my $checkouts;
+
+        if ( $body =~ m/^RAO/i ) {
+            $code = "TWILIO_RENEW_ALL_OD";
+            my $checkouts = $patron->overdues;
+        } else {
+            $code = "TWILIO_RENEW_ALL";
+            $checkouts = $patron->checkouts;
+        }
+
+        my @results;
+        if ( $checkouts ) {
+            while ( my $c = $checkouts->next ) {
+                my $data;
+                my $item = $c->item;
+                $data->{item} = $item;
+                if ( $item ) {
+                    my ( $can, $reason ) = CanBookBeRenewed( $patron, $item->checkout );
+                    $data->{can_renew} = $can;
+                    $data->{cannot_renew_reason} = $reason;
+
+                    if ( $can ) {
+                        my $due_date = AddRenewal( $patron->id, $item->id, _GetCircControlBranch( $item->unblessed, $patron->unblessed ) );
+                        $data->{renewal_due_date} = $due_date;
+                    }
+                }
+                push( @results, $data );
+            }
+        }
+
+        $objects->{renewals} = \@results;
+    }
+    elsif ( $body =~ m/^IOWE/i ) {
+        $code = "TWILIO_ACCOUNTLINES";
+    }
+    elsif ( $body =~ m/^SWITCH\s*PHONE (\S+)/i ) {
+        $code = "TWILIO_SWITCH_PHONE";
+        my $phone_number = $1;
+
+        if ( $phone_number =~ m/^(\+[1-9]\d{0,2})?\d{1,12}$/ ) {
+            $patron->update({ smsalertnumber => $phone_number });
+            $objects->{new_smsalertnumber} = $phone_number;
+        }
+    }
     else {
         $code = "TWILIO_NO_CMD";
     }
@@ -110,7 +175,8 @@ sub webhook {
         lang        => $lang,
         tables      => $tables,
         objects     => {
-            nothing => undef # Placeholder in case $tables is empty
+            nothing => undef, # Placeholder in case $tables and $objects are empty
+            %$objects,
         },
         message_transport_type => 'sms'
     );
