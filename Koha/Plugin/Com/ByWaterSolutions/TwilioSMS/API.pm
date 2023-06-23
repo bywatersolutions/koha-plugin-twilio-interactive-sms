@@ -88,23 +88,22 @@ sub webhook {
     my $objects = {};
 
     my $regexes = {
-        TEST => '^TEST',
-        HELP => '^HELP\s*ME',
-        CHECKOUTS => '^MY\s*ITEMS',
-        OVERDUES => '^OL',
-        HOLDS_WAITING => '^HL',
-        RENEW_ITEM => '^R (\S+)',
-        RENEW_ALL_ODUE => '^RAO',
-        RENEW_ALL => '^RA',
-        ACCOUNTLINES => '^I\s*OWE',
-        SWITCH_PHONE => '^SWITCH\s*PHONE (\S+)',
-        LANGUAGES_LIST => '^LANGUAGES',
+        TEST             => '^TEST',
+        HELP             => '^HELP\s*ME',
+        CHECKOUTS        => '^MY\s*ITEMS',
+        OVERDUES         => '^OL',
+        HOLDS_WAITING    => '^HL',
+        RENEW_ITEM       => '^R (\S+)',
+        RENEW_ALL_ODUE   => '^RAO',
+        RENEW_ALL        => '^RA',
+        ACCOUNTLINES     => '^I\s*OWE',
+        SWITCH_PHONE     => '^SWITCH\s*PHONE (\S+)',
+        LANGUAGES_LIST   => '^LANGUAGES',
         LANGUAGES_SWITCH => '^LANGUAGE (\S+)',
     };
 
-
-    if ( $KeywordRegExes ) {
-        my ( $custom_regexes ) = Load $KeywordRegExes;
+    if ($KeywordRegExes) {
+        my ($custom_regexes) = Load $KeywordRegExes;
         $regexes = { %$regexes, %$custom_regexes };
     }
 
@@ -126,43 +125,59 @@ sub webhook {
     elsif ( $body =~ m/$regexes->{RENEW_ITEM}/i ) {
         $code = "TWILIO_RENEW_ONE";
         my $barcode = $1;
-        my $item = Koha::Items->find({ barcode => $barcode });
+        my $item    = Koha::Items->find( { barcode => $barcode } );
         $objects->{item} = $item;
-        if ( $item ) {
+        if ($item) {
             my ( $can, $reason ) = CanBookBeRenewed( $patron, $item->checkout );
-            $objects->{can_renew} = $can;
+            $objects->{can_renew}           = $can;
             $objects->{cannot_renew_reason} = $reason;
 
-            if ( $can ) {
-                my $due_date = AddRenewal( $patron->id, $item->id, _GetCircControlBranch( $item->unblessed, $patron->unblessed ) );
+            if ($can) {
+                my $due_date = AddRenewal(
+                    $patron->id,
+                    $item->id,
+                    _GetCircControlBranch(
+                        $item->unblessed, $patron->unblessed
+                    )
+                );
                 $objects->{renewal_due_date} = $due_date;
             }
         }
     }
-    elsif ( $body =~ m/$regexes->{RENEW_ALL}/i || $body =~ m/$regexes->{RENEW_ALL_ODUE}/i ) { # Handle both "Renew All" and "Renew All Overdue"
+    elsif ($body =~ m/$regexes->{RENEW_ALL}/i
+        || $body =~ m/$regexes->{RENEW_ALL_ODUE}/i )
+    {    # Handle both "Renew All" and "Renew All Overdue"
         my $checkouts;
 
         if ( $body =~ m/$regexes->{RENEW_ALL_ODUE}/i ) {
             $code = "TWILIO_RENEW_ALL_OD";
             my $checkouts = $patron->overdues;
-        } else {
-            $code = "TWILIO_RENEW_ALL";
+        }
+        else {
+            $code      = "TWILIO_RENEW_ALL";
             $checkouts = $patron->checkouts;
         }
 
         my @results;
-        if ( $checkouts ) {
+        if ($checkouts) {
             while ( my $c = $checkouts->next ) {
                 my $data;
                 my $item = $c->item;
                 $data->{item} = $item;
-                if ( $item ) {
-                    my ( $can, $reason ) = CanBookBeRenewed( $patron, $item->checkout );
-                    $data->{can_renew} = $can;
+                if ($item) {
+                    my ( $can, $reason ) =
+                      CanBookBeRenewed( $patron, $item->checkout );
+                    $data->{can_renew}           = $can;
                     $data->{cannot_renew_reason} = $reason;
 
-                    if ( $can ) {
-                        my $due_date = AddRenewal( $patron->id, $item->id, _GetCircControlBranch( $item->unblessed, $patron->unblessed ) );
+                    if ($can) {
+                        my $due_date = AddRenewal(
+                            $patron->id,
+                            $item->id,
+                            _GetCircControlBranch(
+                                $item->unblessed, $patron->unblessed
+                            )
+                        );
                         $data->{renewal_due_date} = $due_date;
                     }
                 }
@@ -180,7 +195,7 @@ sub webhook {
         my $phone_number = $1;
 
         if ( $phone_number =~ m/^(\+[1-9]\d{0,2})?\d{1,12}$/ ) {
-            $patron->update({ smsalertnumber => $phone_number });
+            $patron->update( { smsalertnumber => $phone_number } );
             $objects->{new_smsalertnumber} = $phone_number;
         }
     }
@@ -190,15 +205,15 @@ sub webhook {
     }
     elsif ( $body =~ m/$regexes->{LANGUAGES_SWITCH}/i ) {
         $code = "TWILIO_LANG_SWITCH";
-        my $lang = $1;
+        my $lang      = $1;
         my $languages = C4::Languages::getTranslatedLanguages('opac');
         my $old_lang;
         my $new_lang;
-        foreach my $l ( @$languages ) {
-            $new_lang = $l 
-                if lc $l->{language} eq lc $lang
-                || lc $l->{rfc4646_subtag} eq lc $lang
-                || lc $l->{native_description} eq lc $lang;
+        foreach my $l (@$languages) {
+            $new_lang = $l
+              if lc $l->{language} eq lc $lang
+              || lc $l->{rfc4646_subtag} eq lc $lang
+              || lc $l->{native_description} eq lc $lang;
             $old_lang = $l if $l->{rfc4646_subtag} eq $patron->lang;
         }
 
@@ -206,14 +221,15 @@ sub webhook {
         $objects->{new_language} = $new_lang;
         $objects->{old_language} = $old_lang;
 
-        $patron->update({lang => $new_lang->{rfc4646_subtag} }) if $new_lang;
+        $patron->update( { lang => $new_lang->{rfc4646_subtag} } ) if $new_lang;
     }
     else {
         $code = "TWILIO_NO_CMD";
     }
 
     my $template =
-      Koha::Notice::Templates->find( { code => $code, lang => $lang } ) || Koha::Notice::Templates->find( { code => $code, lang => 'default' } );
+         Koha::Notice::Templates->find( { code => $code, lang => $lang } )
+      || Koha::Notice::Templates->find( { code => $code, lang => 'default' } );
     my $template_content = $template->content;
     warn "TABLES: " . Data::Dumper::Dumper($tables);
     my $letter = C4::Letters::GetPreparedLetter(
@@ -222,7 +238,8 @@ sub webhook {
         lang        => $lang,
         tables      => $tables,
         objects     => {
-            nothing => undef, # Placeholder in case $tables and $objects are empty
+            nothing =>
+              undef,    # Placeholder in case $tables and $objects are empty
             %$objects,
         },
         message_transport_type => 'sms'
