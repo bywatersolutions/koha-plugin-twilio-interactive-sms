@@ -85,22 +85,37 @@ sub webhook {
 
     my $objects = {};
 
-    if ( !$patron || $body =~ m/^TEST/i ) {
+    my $regexes = {
+        TEST => '^TEST',
+        HELP => '^HELP\s*ME',
+        CHECKOUTS => '^MY\s*ITEMS',
+        OVERDUES => '^OL',
+        HOLDS_WAITING => '^HL',
+        RENEW_ITEM => '^R (\S+)',
+        RENEW_ALL_ODUE => '^RAO',
+        RENEW_ALL => '^RA',
+        ACCOUNTLINES => '^I\s*OWE',
+        SWITCH_PHONE => '^SWITCH\s*PHONE (\S+)',
+        LANGUAGES_LIST => '^LANGUAGES',
+        LANGUAGES_SWITCH => '^LANGUAGE (\S+)',
+    };
+
+    if ( !$patron || $body =~ m/$regexes->{TEST}/i ) {
         $code = "TWILIO_TEST";
     }
-    elsif ( $body =~ m/^HELP\s*ME/i ) {
+    elsif ( $body =~ m/$regexes->{HELP}/i ) {
         $code = "TWILIO_HELP";
     }
-    elsif ( $body =~ m/^MY\s*ITEMS/i ) {
+    elsif ( $body =~ m/$regexes->{CHECKOUTS}/i ) {
         $code = "TWILIO_CHECKOUTS_CUR";
     }
-    elsif ( $body =~ m/^OL/i ) {
+    elsif ( $body =~ m/$regexes->{OVERDUES}/i ) {
         $code = "TWILIO_CHECKOUTS_OD";
     }
-    elsif ( $body =~ m/^HL/i ) {
+    elsif ( $body =~ m/$regexes->{HOLDS_WAITING}/i ) {
         $code = "TWILIO_HOLDS_WAITING";
     }
-    elsif ( $body =~ m/^R (\S+)/i ) {
+    elsif ( $body =~ m/$regexes->{RENEW_ITEM}/i ) {
         $code = "TWILIO_RENEW_ONE";
         my $barcode = $1;
         my $item = Koha::Items->find({ barcode => $barcode });
@@ -116,10 +131,10 @@ sub webhook {
             }
         }
     }
-    elsif ( $body =~ m/^RA/i ) { # Handle both "Renew All" and "Renew All Overdue"
+    elsif ( $body =~ m/$regexes->{RENEW_ALL}/i || $body =~ m/$regexes->{RENEW_ALL_ODUE}/i ) { # Handle both "Renew All" and "Renew All Overdue"
         my $checkouts;
 
-        if ( $body =~ m/^RAO/i ) {
+        if ( $body =~ m/$regexes->{RENEW_ALL_ODUE}/i ) {
             $code = "TWILIO_RENEW_ALL_OD";
             my $checkouts = $patron->overdues;
         } else {
@@ -149,10 +164,10 @@ sub webhook {
 
         $objects->{renewals} = \@results;
     }
-    elsif ( $body =~ m/^IOWE/i ) {
+    elsif ( $body =~ m/$regexes->{ACCOUNTLINES}/i ) {
         $code = "TWILIO_ACCOUNTLINES";
     }
-    elsif ( $body =~ m/^SWITCH\s*PHONE (\S+)/i ) {
+    elsif ( $body =~ m/$regexes->{SWITCH_PHONE}/i ) {
         $code = "TWILIO_SWITCH_PHONE";
         my $phone_number = $1;
 
@@ -161,11 +176,11 @@ sub webhook {
             $objects->{new_smsalertnumber} = $phone_number;
         }
     }
-    elsif ( $body =~ m/^LANGUAGES/i ) {
+    elsif ( $body =~ m/$regexes->{LANGUAGES_LIST}/i ) {
         $code = "TWILIO_LANGUAGES";
         $objects->{languages} = C4::Languages::getTranslatedLanguages('opac');
     }
-    elsif ( $body =~ m/^LANGUAGE (\S+)/i ) {
+    elsif ( $body =~ m/$regexes->{LANGUAGES_SWITCH}/i ) {
         $code = "TWILIO_LANG_SWITCH";
         my $lang = $1;
         my $languages = C4::Languages::getTranslatedLanguages('opac');
