@@ -161,12 +161,36 @@ sub webhook {
             $objects->{new_smsalertnumber} = $phone_number;
         }
     }
+    elsif ( $body =~ m/^LANGUAGES/i ) {
+        $code = "TWILIO_LANGUAGES";
+        $objects->{languages} = C4::Languages::getTranslatedLanguages('opac');
+    }
+    elsif ( $body =~ m/^LANGUAGE (\S+)/i ) {
+        $code = "TWILIO_LANG_SWITCH";
+        my $lang = $1;
+        my $languages = C4::Languages::getTranslatedLanguages('opac');
+        my $old_lang;
+        my $new_lang;
+        foreach my $l ( @$languages ) {
+            $new_lang = $l 
+                if lc $l->{language} eq lc $lang
+                || lc $l->{rfc4646_subtag} eq lc $lang
+                || lc $l->{native_description} eq lc $lang;
+            $old_lang = $l if $l->{rfc4646_subtag} eq $patron->lang;
+        }
+
+        $objects->{requested_language};
+        $objects->{new_language} = $new_lang;
+        $objects->{old_language} = $old_lang;
+
+        $patron->update({lang => $new_lang->{rfc4646_subtag} }) if $new_lang;
+    }
     else {
         $code = "TWILIO_NO_CMD";
     }
 
     my $template =
-      Koha::Notice::Templates->find( { code => $code, lang => $lang } );
+      Koha::Notice::Templates->find( { code => $code, lang => $lang } ) || Koha::Notice::Templates->find( { code => $code, lang => 'default' } );
     my $template_content = $template->content;
     warn "TABLES: " . Data::Dumper::Dumper($tables);
     my $letter = C4::Letters::GetPreparedLetter(
