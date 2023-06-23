@@ -249,6 +249,8 @@ VALUES      (NULL,
 '2023-06-23 11:16:45');  
 };
 
+    C4::Context->dbh->do($sql);
+
     return 1;
 }
 
