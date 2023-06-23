@@ -23,6 +23,7 @@ use Data::Dumper;
 use HTTP::Request::Common;
 use LWP::UserAgent;
 use Mojo::JSON qw(decode_json);
+use YAML::XS qw(Load);
 
 use C4::Circulation qw(CanBookBeRenewed AddRenewal _GetCircControlBranch);
 
@@ -46,10 +47,11 @@ sub webhook {
 
     my $plugin = Koha::Plugin::Com::ByWaterSolutions::TwilioSMS->new();
 
-    my $WebhookAuthToken = $plugin->retrieve_data('WebhookAuthToken');
     my $AccountSid       = $plugin->retrieve_data('AccountSid');
     my $AuthToken        = $plugin->retrieve_data('AuthToken');
     my $From             = $plugin->retrieve_data('From');
+    my $KeywordRegExes   = $plugin->retrieve_data('KeywordRegExes');
+    my $WebhookAuthToken = $plugin->retrieve_data('WebhookAuthToken');
 
     unless ( $token eq $WebhookAuthToken ) {
         return $c->render(
@@ -99,6 +101,12 @@ sub webhook {
         LANGUAGES_LIST => '^LANGUAGES',
         LANGUAGES_SWITCH => '^LANGUAGE (\S+)',
     };
+
+
+    if ( $KeywordRegExes ) {
+        my ( $custom_regexes ) = Load $KeywordRegExes;
+        $regexes = { %$regexes, %$custom_regexes };
+    }
 
     if ( !$patron || $body =~ m/$regexes->{TEST}/i ) {
         $code = "TWILIO_TEST";

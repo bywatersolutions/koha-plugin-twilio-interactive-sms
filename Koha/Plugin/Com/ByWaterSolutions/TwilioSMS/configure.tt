@@ -21,6 +21,11 @@
 			<legend>Configuration</legend>
 
 			<div class="form-group">
+				<label for="KeywordRegExes">Keyword Regular Expressions:</label>
+				<textarea class="form-control" name="KeywordRegExes" rows="13">[% KeywordRegExes %]</textarea>
+			</div>
+
+			<div class="form-group">
 				<label for="AccountSid">Account SID:</label>
 				<input type="text" class="form-control" name="AccountSid" value="[% AccountSid %]"/>
 			</div>

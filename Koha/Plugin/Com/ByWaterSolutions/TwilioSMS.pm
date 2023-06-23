@@ -67,6 +67,7 @@ sub configure {
             AccountSid               => $self->retrieve_data('AccountSid'),
             AuthToken                => $self->retrieve_data('AuthToken'),
             From                     => $self->retrieve_data('From'),
+            KeywordRegExes           => $self->retrieve_data('KeywordRegExes'),
             WebhookAuthToken         => $self->retrieve_data('WebhookAuthToken'),
         );
 
@@ -77,6 +78,7 @@ sub configure {
             AccountSid               => $cgi->param('AccountSid'),
             AuthToken                => $cgi->param('AuthToken'),
             From                     => $cgi->param('From'),
+            KeywordRegExes           => $cgi->param('KeywordRegExes'),
             WebhookAuthToken         => $cgi->param('WebhookAuthToken'),
         });
         $self->go_home();
