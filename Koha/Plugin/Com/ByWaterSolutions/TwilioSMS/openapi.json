@@ -21,7 +21,7 @@
         }
       ],
       "produces": [
-        "application/json"
+        "application/xml"
       ],
       "responses": {
         "200": {

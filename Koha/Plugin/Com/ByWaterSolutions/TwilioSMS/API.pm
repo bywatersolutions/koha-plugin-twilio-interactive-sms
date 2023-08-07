@@ -270,7 +270,7 @@ sub webhook {
 
     return $c->render(
         status  => 200,
-        openapi => { bothered => Mojo::JSON->true }
+        openapi =>'<?xml version="1.0" encoding="UTF-8"?><Response></Response>',
     );
 }
 
