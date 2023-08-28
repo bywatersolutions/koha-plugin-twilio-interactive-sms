@@ -13,9 +13,142 @@
           "type": "string"
         },
         {
+          "name": "ToCountry",
+          "in": "query",
+          "description": "ToCountry",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "name": "ToState",
+          "in": "query",
+          "description": "ToState",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "name": "SmsMessageSid",
+          "in": "query",
+          "description": "SmsMessageSid",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "name": "NumMedia",
+          "in": "query",
+          "description": "NumMedia",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "name": "ToCity",
+          "in": "query",
+          "description": "ToCity",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "name": "FromZip",
+          "in": "query",
+          "description": "FromZip",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "name": "SmsSid",
+          "in": "query",
+          "description": "SmsSid",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "name": "FromState",
+          "in": "query",
+          "description": "FromState",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "name": "SmsStatus",
+          "in": "query",
+          "description": "SmsStatus",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "name": "FromCity",
+          "in": "query",
+          "description": "FromCity",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "name": "Body",
+          "in": "query",
+          "description": "Body",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "name": "FromCountry",
+          "in": "query",
+          "description": "FromCountry",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "name": "To",
+          "in": "query",
+          "description": "To",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "name": "MessagingServiceSid",
+          "in": "query",
+          "description": "MessagingServiceSid",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "name": "ToZip",
+          "in": "query",
+          "description": "ToZip",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "name": "NumSegments",
+          "in": "query",
+          "description": "NumSegments",
+          "required": false,
+          "type": "string"
+        },
+        {
           "name": "MessageSid",
           "in": "query",
-          "description": "Internal patron identifier",
+          "description": "MessageSid",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "name": "AccountSid",
+          "in": "query",
+          "description": "AccountSid",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "name": "From",
+          "in": "query",
+          "description": "From",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "name": "ApiVersion",
+          "in": "query",
+          "description": "ApiVersion",
           "required": false,
           "type": "string"
         }
