@@ -20,18 +20,20 @@ Create a Webhook Auth Token ( basically a password ) in the Webhook Auth Token f
 Each action is triggered by a keyword regular expressions.
 These can be overridden in the plugin configuration.
 These are the defaults:
-* TEST: ^TEST2
-* HELP: ^HELP\s*ME
-* CHECKOUTS: ^MY\s*ITEMS
-* OVERDUES: ^OL
-* HOLDS_WAITING: ^HL
-* RENEW_ITEM: ^R (\S+)
-* RENEW_ALL_ODUE: ^RAO
-* RENEW_ALL: ^RA
-* ACCOUNTLINES: ^I\s*OWE
-* SWITCH_PHONE: ^SWITCH\s*PHONE (\S+)
-* LANGUAGES_LIST: ^LANGUAGES
-* LANGUAGES_SWITCH: ^LANGUAGE (\S+)
+```yaml
+TEST: ^TEST2
+HELP: ^HELP\s*ME
+CHECKOUTS: ^MY\s*ITEMS
+OVERDUES: ^OL
+HOLDS_WAITING: ^HL
+RENEW_ITEM: ^R (\S+)
+RENEW_ALL_ODUE: ^RAO
+RENEW_ALL: ^RA
+ACCOUNTLINES: ^I\s*OWE
+SWITCH_PHONE: ^SWITCH\s*PHONE (\S+)
+LANGUAGES_LIST: ^LANGUAGES
+LANGUAGES_SWITCH: ^LANGUAGE (\S+)
+```
 
 ## Notices
 
