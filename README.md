@@ -21,7 +21,7 @@ Each action is triggered by a keyword regular expressions.
 These can be overridden in the plugin configuration.
 These are the defaults:
 ```yaml
-TEST: ^TEST2
+TEST: ^TEST
 HELP: ^HELP\s*ME
 CHECKOUTS: ^MY\s*ITEMS
 OVERDUES: ^OL
