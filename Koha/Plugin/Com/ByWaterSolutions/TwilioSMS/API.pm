@@ -151,7 +151,7 @@ sub webhook {
 
         if ( $body =~ m/$regexes->{RENEW_ALL_ODUE}/i ) {
             $code = "TWILIO_RENEW_ALL_OD";
-            my $checkouts = $patron->overdues;
+            $checkouts = $patron->overdues;
         }
         else {
             $code      = "TWILIO_RENEW_ALL";
