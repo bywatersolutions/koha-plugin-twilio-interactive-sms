@@ -146,7 +146,18 @@ VALUES      (NULL,
              'Twilio Checkouts - Overdue',
              0,
              'Twilio Checkouts - Overdue',
-'[% USE KohaDates %]\r\n[%- SET checkouts = borrower.overdues %]\r\n[% IF checkouts.count %]\r\n  You have the following overdue items checked out:\r\n  [%- FOREACH c IN borrower.pending_checkouts %]\r\n    [% c.item.barcode %] : [% c.item.biblio.title %] due [% c.date_due | $KohaDates %]\r\n  [% END %]\r\n[% ELSE %]\r\n  You have no overdue items checked out.\r\n[% END %]'
+'[%- USE KohaDates %]
+[%- SET checkouts = borrower.overdues %]
+[%- IF checkouts.count %]
+  You have the following overdue items checked out:
+  [%- FOREACH c IN borrower.pending_checkouts %]
+    [%- IF c.is_overdue %]
+        [% c.item.barcode %] : [% c.item.biblio.title %] due [% c.date_due | $KohaDates %]
+    [%- END %]
+  [%- END %]
+[%- ELSE %]
+  You have no overdue items checked out.
+[%- END %]'
              ,
 'sms',
 'default',
