@@ -133,13 +133,11 @@ sub webhook {
             $objects->{cannot_renew_reason} = $reason;
 
             if ($can) {
-                my $due_date = AddRenewal(
-                    $patron->id,
-                    $item->id,
-                    _GetCircControlBranch(
-                        $item->unblessed, $patron->unblessed
-                    )
-                );
+                my $due_date = AddRenewal({
+                    borrowernumber => $patron->id,
+                    itemnumber     => $item->id,
+                    branch         => _GetCircControlBranch($item->unblessed, $patron->unblessed)
+                });
                 $objects->{renewal_due_date} = $due_date;
             }
         }
@@ -171,13 +169,11 @@ sub webhook {
                     $data->{cannot_renew_reason} = $reason;
 
                     if ($can) {
-                        my $due_date = AddRenewal(
-                            $patron->id,
-                            $item->id,
-                            _GetCircControlBranch(
-                                $item->unblessed, $patron->unblessed
-                            )
-                        );
+                        my $due_date = AddRenewal({
+                            borrowernumber => $patron->id,
+                            itemnumber     => $item->id,
+                            branch         => _GetCircControlBranch($item->unblessed, $patron->unblessed)
+                        });
                         $data->{renewal_due_date} = $due_date;
                     }
                 }
