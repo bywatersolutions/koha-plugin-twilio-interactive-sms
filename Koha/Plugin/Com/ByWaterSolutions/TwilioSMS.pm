@@ -91,7 +91,7 @@ sub install() {
     my ( $self, $args ) = @_;
 
     my $sql = q{
- INSERT INTO `letter`
+ INSERT INTO `letter` ( id, module, code, branchcode, name, is_html, title, content, message_transport_type, lang, updated_on )
 VALUES      (NULL,
              'circulation',
              'TWILIO_CHECKOUTS_CUR',

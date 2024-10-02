@@ -213,7 +213,6 @@ sub webhook {
             $old_lang = $l if $l->{rfc4646_subtag} eq $patron->lang;
         }
 
-        $objects->{requested_language};
         $objects->{new_language} = $new_lang;
         $objects->{old_language} = $old_lang;
 
