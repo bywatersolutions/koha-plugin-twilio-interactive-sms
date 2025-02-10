@@ -116,9 +116,12 @@ sub webhook {
         } elsif ($body =~ m/$regexes->{HOLDS_WAITING}/i) {
             $code = "TWILIO_HOLDS_WAITING";
         } elsif ($body =~ m/$regexes->{RENEW_ITEM}/i) {
+             warn "Matched RENEW_ITEM regex";
             $code = "TWILIO_RENEW_ONE";
             my $barcode = $1;
+            warn "Captured barcode: $barcode";
             my $item    = Koha::Items->find({barcode => $barcode});
+            warn "Item found: ", Dumper($item);
             $objects->{item} = $item;
             if ($item) {
                 my ($can, $reason) = CanBookBeRenewed($patron, $item->checkout);
