@@ -24,7 +24,7 @@ use HTTP::Request::Common;
 use LWP::UserAgent;
 use Mojo::JSON qw(decode_json);
 use YAML::XS qw(Load);
-
+use Try::Tiny;
 use C4::Circulation qw(CanBookBeRenewed AddRenewal _GetCircControlBranch);
 
 =head1 API
@@ -128,16 +128,25 @@ sub webhook {
         my $item    = Koha::Items->find( { barcode => $barcode } );
         $objects->{item} = $item;
         if ($item) {
-            my ( $can, $reason ) = CanBookBeRenewed( $patron, $item->checkout );
+            try {
+                my ( $can, $reason ) = CanBookBeRenewed( $patron, $item->checkout );
+            } catch {
+                warn "ERORR IN Koha::Plugin::Com::ByWaterSolutions::TwilioSMS::API - $_";
+            };
+            
             $objects->{can_renew}           = $can;
             $objects->{cannot_renew_reason} = $reason;
 
             if ($can) {
-                my $due_date = AddRenewal({
-                    borrowernumber => $patron->id,
-                    itemnumber     => $item->id,
-                    branch         => _GetCircControlBranch($item->unblessed, $patron->unblessed)
-                });
+                try {
+                    my $due_date = AddRenewal({
+                        borrowernumber => $patron->id,
+                        itemnumber     => $item->id,
+                        branch         => _GetCircControlBranch($item->unblessed, $patron->unblessed)
+                    });
+                } catch {
+                    warn "ERORR IN Koha::Plugin::Com::ByWaterSolutions::TwilioSMS::API - $_";
+                };
                 $objects->{renewal_due_date} = $due_date;
             }
         }
