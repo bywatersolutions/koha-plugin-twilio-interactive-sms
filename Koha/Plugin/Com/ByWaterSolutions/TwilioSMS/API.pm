@@ -37,8 +37,27 @@ use C4::Circulation qw(CanBookBeRenewed AddRenewal _GetCircControlBranch);
 =cut
 
 sub webhook {
-    try {
-        my $c = shift->openapi->valid_input or return;
+
+       my $c = shift;
+
+    # Check if $c is defined
+    unless (defined $c) {
+        warn "Controller object is undefined!";
+        return;
+    }
+
+    # Check if openapi returns a valid object
+    my $api = $c->openapi;
+    unless (defined $api) {
+        warn "openapi returned undefined value!";
+        return;
+    }
+
+    # Check if valid_input exists and is true
+    unless ($api->valid_input) {
+        warn "Invalid input from openapi!";
+        return;
+    } 
 
         my $params = $c->req->params->to_hash;
         warn "PARAMS: " . Data::Dumper::Dumper($c->req->params->to_hash);
@@ -242,9 +261,6 @@ sub webhook {
         }
 
         return $c->render(status => 200, openapi => '<?xml version="1.0" encoding="UTF-8"?><Response></Response>',);
-    } catch {
-        warn "ERORR IN Koha::Plugin::Com::ByWaterSolutions::TwilioSMS::API - $_";
-    };
 }
 
 1;
