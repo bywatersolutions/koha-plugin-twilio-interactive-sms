@@ -151,7 +151,7 @@ sub webhook {
                     my $due_date = AddRenewal({
                         borrowernumber => $patron->id,
                         itemnumber     => $item->id,
-                        branch         => _GetCircControlBranch($item->unblessed, $patron->unblessed)
+                        branch         => _GetCircControlBranch($item, $patron)
                     });
                     $objects->{renewal_due_date} = $due_date;
                 }
@@ -183,7 +183,7 @@ sub webhook {
                             my $due_date = AddRenewal({
                                 borrowernumber => $patron->id,
                                 itemnumber     => $item->id,
-                                branch         => _GetCircControlBranch($item->unblessed, $patron->unblessed)
+                                branch         => _GetCircControlBranch($item, $patron)
                             });
                             $data->{renewal_due_date} = $due_date;
                         }
