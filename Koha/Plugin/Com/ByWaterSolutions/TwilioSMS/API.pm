@@ -246,18 +246,25 @@ sub webhook {
         warn "LETTER: " . Data::Dumper::Dumper($letter);
         $outgoing = $letter->{content};
 
-        warn "OUTGOING: $outgoing";
+        # Twilio cannot auto-split messages over 1600 characters, so we need to split
+        # our message into 1600 character chunks and send each one separately.
+        # Twilio should then split those messages into 160 character chunks as well
+        my @chunks = ($outgoing =~ /.{1,1600}/g);
+        warn "OUTGOING: " . Data::Dumper::Dumper(\@chunks);
 
-        my $ua      = LWP::UserAgent->new;
-        my $url     = "https://api.twilio.com/2010-04-01/Accounts/$AccountSid/Messages.json";
-        my $request = POST $url, [From => $From, To => $To, Body => $outgoing,];
-        $request->authorization_basic($AccountSid, $AuthToken);
-        my $response = $ua->request($request);
+        my $ua  = LWP::UserAgent->new;
+        my $url = "https://api.twilio.com/2010-04-01/Accounts/$AccountSid/Messages.json";
 
-        if ($response->is_success) {
-            warn "RESPONSE: " . $response->decoded_content;
-        } else {
-            warn "Twilio response indicates failure: " . $response->status_line;
+        for my $chunk (@chunks) {
+            my $request = POST $url, [From => $From, To => $To, Body => $chunk];
+            $request->authorization_basic($AccountSid, $AuthToken);
+            my $response = $ua->request($request);
+
+            if ($response->is_success) {
+                warn "RESPONSE: " . $response->decoded_content;
+            } else {
+                warn "Twilio response indicates failure: " . $response->status_line;
+            }
         }
 
         return $c->render(status => 200, openapi => '<?xml version="1.0" encoding="UTF-8"?><Response></Response>',);
