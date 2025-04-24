@@ -83,16 +83,12 @@ sub webhook {
 
         warn qq{"$body" FROM $from};
 
-        my $normalized_from = $from;
-           $normalized_from =~ s/^\+1//g;
-
-        my $patrons = Koha::Patrons->search({
-                -or => [
-                 smsalertnumber => $from,
-                 smsalertnumber => $normalized_from
-                       ]
-        });
-
+        # Look for exact match first
+        unless ($patron = Koha::Patrons->find({smsalertnumber => $from})) {
+        # Look for a match without the country code
+          $from =~ s/^\+1//g;
+          $patron = Koha::Patrons->find({smsalertnumber => $from});
+        }
 
         # TODO: move this to a TWILIO_NO_CMD template
         my $outgoing = "I didn't understand your command. Send 'HELP' for a list of commands";
