@@ -83,6 +83,8 @@ sub webhook {
 
         warn qq{"$body" FROM $from};
 
+        my $patron;
+
         # Look for exact match first
         unless ($patron = Koha::Patrons->find({smsalertnumber => $from})) {
         # Look for a match without the country code
