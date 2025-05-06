@@ -246,7 +246,7 @@ sub webhook {
         # Twilio cannot auto-split messages over 1600 characters, so we need to split
         # our message into 1600 character chunks and send each one separately.
         # Twilio should then split those messages into 160 character chunks as well
-        my @chunks = ($outgoing =~ /.{1,1600}/g);
+        my @chunks = unpack("(A1500)*", $outgoing);
         warn "OUTGOING: " . Data::Dumper::Dumper(\@chunks);
 
         my $ua  = LWP::UserAgent->new;
