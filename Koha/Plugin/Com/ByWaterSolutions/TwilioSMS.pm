@@ -37,14 +37,15 @@ our $MINIMUM_VERSION = "{MINIMUM_VERSION}";
 
 ## Here is our metadata, some keys are required, some are optional
 our $metadata = {
-    name            => 'Twilio Interactive SMS',
+    name            => 'Twilio SMS',
     author          => 'Kyle M Hall',
     date_authored   => '2023-06-13',
     date_updated    => "1900-01-01",
     minimum_version => $MINIMUM_VERSION,
     maximum_version => undef,
     version         => $VERSION,
-    description     => 'This plugin enables patrons to send sms messages to Koha and recieve responses via Twilio.',
+    description     =>
+        'This plugin sends Koha SMS notices to patrons via Twilio, updates the message status from Twilio delivery callbacks, and enables patrons to send sms messages to Koha and receive responses via Twilio.',
 };
 
 sub new {
