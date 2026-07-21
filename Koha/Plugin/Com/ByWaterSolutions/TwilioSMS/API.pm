@@ -38,235 +38,240 @@ use C4::Circulation qw(CanBookBeRenewed AddRenewal _GetCircControlBranch);
 
 sub webhook {
 
-       my $c = shift;
+    my $c = shift;
 
     # Check if $c is defined
-    unless (defined $c) {
+    unless ( defined $c ) {
         warn "Controller object is undefined!";
         return;
     }
 
     # Check if openapi returns a valid object
     my $api = $c->openapi;
-    unless (defined $api) {
+    unless ( defined $api ) {
         warn "openapi returned undefined value!";
         return;
     }
 
     # Check if valid_input exists and is true
-    unless ($api->valid_input) {
+    unless ( $api->valid_input ) {
         warn "Invalid input from openapi!";
         return;
-    } 
+    }
 
-        my $params = $c->req->params->to_hash;
-        warn "PARAMS: " . Data::Dumper::Dumper($c->req->params->to_hash);
-        my $To       = $params->{From};    # Weird but less confusing in the long run
-        my $incoming = $params->{Body};    # We are respnding *To* the *From* number
+    my $params = $c->req->params->to_hash;
+    warn "PARAMS: " . Data::Dumper::Dumper( $c->req->params->to_hash );
+    my $To       = $params->{From};    # Weird but less confusing in the long run
+    my $incoming = $params->{Body};    # We are respnding *To* the *From* number
 
-        my $token = $c->validation->param('token');
+    my $token = $c->validation->param('token');
 
-        my $plugin = Koha::Plugin::Com::ByWaterSolutions::TwilioSMS->new();
+    my $plugin = Koha::Plugin::Com::ByWaterSolutions::TwilioSMS->new();
 
-        my $AccountSid       = $plugin->retrieve_data('AccountSid');
-        my $AuthToken        = $plugin->retrieve_data('AuthToken');
-        my $From             = $plugin->retrieve_data('From');
-        my $KeywordRegExes   = $plugin->retrieve_data('KeywordRegExes');
-        my $WebhookAuthToken = $plugin->retrieve_data('WebhookAuthToken');
+    my $AccountSid       = $plugin->retrieve_data('AccountSid');
+    my $AuthToken        = $plugin->retrieve_data('AuthToken');
+    my $From             = $plugin->retrieve_data('From');
+    my $KeywordRegExes   = $plugin->retrieve_data('KeywordRegExes');
+    my $WebhookAuthToken = $plugin->retrieve_data('WebhookAuthToken');
 
-        unless ($token eq $WebhookAuthToken) {
-            return $c->render(status => 401, openapi => {error => "Invalid token"});
-        }
+    unless ( $token eq $WebhookAuthToken ) {
+        return $c->render( status => 401, openapi => { error => "Invalid token" } );
+    }
 
-        my $body = $params->{Body};
-        my $from = $params->{From};
+    my $body = $params->{Body};
+    my $from = $params->{From};
 
-        warn qq{"$body" FROM $from};
+    warn qq{"$body" FROM $from};
 
-        my $patron;
+    my $patron;
 
-        # Look for exact match first
-        unless ($patron = Koha::Patrons->find({smsalertnumber => $from})) {
+    # Look for exact match first
+    unless ( $patron = Koha::Patrons->find( { smsalertnumber => $from } ) ) {
+
         # Look for a match without the country code
-          $from =~ s/^\+1//g;
-          $patron = Koha::Patrons->find({smsalertnumber => $from});
-        }
+        $from =~ s/^\+1//g;
+        $patron = Koha::Patrons->find( { smsalertnumber => $from } );
+    }
 
-        # TODO: move this to a TWILIO_NO_CMD template
-        my $outgoing = "I didn't understand your command. Send 'HELP' for a list of commands";
+    # TODO: move this to a TWILIO_NO_CMD template
+    my $outgoing = "I didn't understand your command. Send 'HELP' for a list of commands";
 
-        my $code = "TWILIO_NO_CMD";
-        my $lang = $patron ? $patron->lang : "default";
+    my $code = "TWILIO_NO_CMD";
+    my $lang = $patron ? $patron->lang : "default";
 
-        my $tables = {};
-        $tables->{borrowers} = $patron->id if $patron;
+    my $tables = {};
+    $tables->{borrowers} = $patron->id if $patron;
 
-        my $objects = {};
+    my $objects = {};
 
-        my $regexes = {
-            TEST             => '^TEST',
-            HELP             => '^HELP\s*ME',
-            CHECKOUTS        => '^MY\s*ITEMS',
-            OVERDUES         => '^OL',
-            HOLDS_WAITING    => '^HL',
-            RENEW_ITEM       => '^R (\S+)',
-            RENEW_ALL_ODUE   => '^RAO',
-            RENEW_ALL        => '^RA',
-            ACCOUNTLINES     => '^I\s*OWE',
-            SWITCH_PHONE     => '^SWITCH\s*PHONE (\S+)',
-            LANGUAGES_LIST   => '^LANGUAGES',
-            LANGUAGES_SWITCH => '^LANGUAGE (\S+)',
-        };
+    my $regexes = {
+        TEST             => '^TEST',
+        HELP             => '^HELP\s*ME',
+        CHECKOUTS        => '^MY\s*ITEMS',
+        OVERDUES         => '^OL',
+        HOLDS_WAITING    => '^HL',
+        RENEW_ITEM       => '^R (\S+)',
+        RENEW_ALL_ODUE   => '^RAO',
+        RENEW_ALL        => '^RA',
+        ACCOUNTLINES     => '^I\s*OWE',
+        SWITCH_PHONE     => '^SWITCH\s*PHONE (\S+)',
+        LANGUAGES_LIST   => '^LANGUAGES',
+        LANGUAGES_SWITCH => '^LANGUAGE (\S+)',
+    };
 
-        if ($KeywordRegExes) {
-            my ($custom_regexes) = Load $KeywordRegExes;
-            $regexes = {%$regexes, %$custom_regexes};
-        }
+    if ($KeywordRegExes) {
+        my ($custom_regexes) = Load $KeywordRegExes;
+        $regexes = { %$regexes, %$custom_regexes };
+    }
 
-        if (!$patron || $body =~ m/$regexes->{TEST}/i) {
-            $code = "TWILIO_TEST";
-        } elsif ($body =~ m/$regexes->{HELP}/i) {
-            $code = "TWILIO_HELP";
-        } elsif ($body =~ m/$regexes->{CHECKOUTS}/i) {
-            $code = "TWILIO_CHECKOUTS_CUR";
-        } elsif ($body =~ m/$regexes->{OVERDUES}/i) {
-            $code = "TWILIO_CHECKOUTS_OD";
-        } elsif ($body =~ m/$regexes->{HOLDS_WAITING}/i) {
-            $code = "TWILIO_HOLDS_WAITING";
-        } elsif ($body =~ m/$regexes->{RENEW_ITEM}/i) {
-             warn "Matched RENEW_ITEM regex";
-            $code = "TWILIO_RENEW_ONE";
-            my $barcode = $1;
-            warn "Captured barcode: $barcode";
-            my $item    = Koha::Items->find({barcode => $barcode});
-            warn "Item found: ", Dumper($item);
-            $objects->{item} = $item;
-            if ($item) {
-                my ($can, $reason) = CanBookBeRenewed($patron, $item->checkout);
-                $objects->{can_renew}           = $can;
-                $objects->{cannot_renew_reason} = $reason;
+    if ( !$patron || $body =~ m/$regexes->{TEST}/i ) {
+        $code = "TWILIO_TEST";
+    } elsif ( $body =~ m/$regexes->{HELP}/i ) {
+        $code = "TWILIO_HELP";
+    } elsif ( $body =~ m/$regexes->{CHECKOUTS}/i ) {
+        $code = "TWILIO_CHECKOUTS_CUR";
+    } elsif ( $body =~ m/$regexes->{OVERDUES}/i ) {
+        $code = "TWILIO_CHECKOUTS_OD";
+    } elsif ( $body =~ m/$regexes->{HOLDS_WAITING}/i ) {
+        $code = "TWILIO_HOLDS_WAITING";
+    } elsif ( $body =~ m/$regexes->{RENEW_ITEM}/i ) {
+        warn "Matched RENEW_ITEM regex";
+        $code = "TWILIO_RENEW_ONE";
+        my $barcode = $1;
+        warn "Captured barcode: $barcode";
+        my $item = Koha::Items->find( { barcode => $barcode } );
+        warn "Item found: ", Dumper($item);
+        $objects->{item} = $item;
+        if ($item) {
+            my ( $can, $reason ) = CanBookBeRenewed( $patron, $item->checkout );
+            $objects->{can_renew}           = $can;
+            $objects->{cannot_renew_reason} = $reason;
 
-                if ($can) {
-                    my $due_date = AddRenewal({
+            if ($can) {
+                my $due_date = AddRenewal(
+                    {
                         borrowernumber => $patron->id,
                         itemnumber     => $item->id,
-                        branch         => _GetCircControlBranch($item, $patron)
-                    });
-                    $objects->{renewal_due_date} = $due_date;
-                }
+                        branch         => _GetCircControlBranch( $item, $patron )
+                    }
+                );
+                $objects->{renewal_due_date} = $due_date;
             }
-        } elsif ($body =~ m/$regexes->{RENEW_ALL}/i || $body =~ m/$regexes->{RENEW_ALL_ODUE}/i)
-        {    # Handle both "Renew All" and "Renew All Overdue"
-            my $checkouts;
+        }
+    } elsif ( $body =~ m/$regexes->{RENEW_ALL}/i || $body =~ m/$regexes->{RENEW_ALL_ODUE}/i )
+    {    # Handle both "Renew All" and "Renew All Overdue"
+        my $checkouts;
 
-            if ($body =~ m/$regexes->{RENEW_ALL_ODUE}/i) {
-                $code      = "TWILIO_RENEW_ALL_OD";
-                $checkouts = $patron->overdues;
-            } else {
-                $code      = "TWILIO_RENEW_ALL";
-                $checkouts = $patron->checkouts;
-            }
+        if ( $body =~ m/$regexes->{RENEW_ALL_ODUE}/i ) {
+            $code      = "TWILIO_RENEW_ALL_OD";
+            $checkouts = $patron->overdues;
+        } else {
+            $code      = "TWILIO_RENEW_ALL";
+            $checkouts = $patron->checkouts;
+        }
 
-            my @results;
-            if ($checkouts) {
-                while (my $c = $checkouts->next) {
-                    my $data;
-                    my $item = $c->item;
-                    $data->{item} = $item;
-                    if ($item) {
-                        my ($can, $reason) = CanBookBeRenewed($patron, $item->checkout);
-                        $data->{can_renew}           = $can;
-                        $data->{cannot_renew_reason} = $reason;
+        my @results;
+        if ($checkouts) {
+            while ( my $c = $checkouts->next ) {
+                my $data;
+                my $item = $c->item;
+                $data->{item} = $item;
+                if ($item) {
+                    my ( $can, $reason ) = CanBookBeRenewed( $patron, $item->checkout );
+                    $data->{can_renew}           = $can;
+                    $data->{cannot_renew_reason} = $reason;
 
-                        if ($can) {
-                            my $due_date = AddRenewal({
+                    if ($can) {
+                        my $due_date = AddRenewal(
+                            {
                                 borrowernumber => $patron->id,
                                 itemnumber     => $item->id,
-                                branch         => _GetCircControlBranch($item, $patron)
-                            });
-                            $data->{renewal_due_date} = $due_date;
-                        }
+                                branch         => _GetCircControlBranch( $item, $patron )
+                            }
+                        );
+                        $data->{renewal_due_date} = $due_date;
                     }
-                    push(@results, $data);
                 }
+                push( @results, $data );
             }
+        }
 
-            $objects->{renewals} = \@results;
-        } elsif ($body =~ m/$regexes->{ACCOUNTLINES}/i) {
-            $code = "TWILIO_ACCOUNTLINES";
-        } elsif ($body =~ m/$regexes->{SWITCH_PHONE}/i) {
-            $code = "TWILIO_SWITCH_PHONE";
-            my $phone_number = $1;
+        $objects->{renewals} = \@results;
+    } elsif ( $body =~ m/$regexes->{ACCOUNTLINES}/i ) {
+        $code = "TWILIO_ACCOUNTLINES";
+    } elsif ( $body =~ m/$regexes->{SWITCH_PHONE}/i ) {
+        $code = "TWILIO_SWITCH_PHONE";
+        my $phone_number = $1;
 
-            if ($phone_number =~ m/^(\+[1-9]\d{0,2})?\d{1,12}$/) {
-                $patron->update({smsalertnumber => $phone_number});
-                $objects->{new_smsalertnumber} = $phone_number;
-            }
-        } elsif ($body =~ m/$regexes->{LANGUAGES_LIST}/i) {
-            $code = "TWILIO_LANGUAGES";
-            $objects->{languages} = C4::Languages::getTranslatedLanguages('opac');
-        } elsif ($body =~ m/$regexes->{LANGUAGES_SWITCH}/i) {
-            $code = "TWILIO_LANG_SWITCH";
-            my $lang      = $1;
-            my $languages = C4::Languages::getTranslatedLanguages('opac');
-            my $old_lang;
-            my $new_lang;
-            foreach my $l (@$languages) {
-                $new_lang = $l
-                    if lc $l->{language} eq lc $lang
-                    || lc $l->{rfc4646_subtag} eq lc $lang
-                    || lc $l->{native_description} eq lc $lang;
-                $old_lang = $l if $l->{rfc4646_subtag} eq $patron->lang;
-            }
+        if ( $phone_number =~ m/^(\+[1-9]\d{0,2})?\d{1,12}$/ ) {
+            $patron->update( { smsalertnumber => $phone_number } );
+            $objects->{new_smsalertnumber} = $phone_number;
+        }
+    } elsif ( $body =~ m/$regexes->{LANGUAGES_LIST}/i ) {
+        $code = "TWILIO_LANGUAGES";
+        $objects->{languages} = C4::Languages::getTranslatedLanguages('opac');
+    } elsif ( $body =~ m/$regexes->{LANGUAGES_SWITCH}/i ) {
+        $code = "TWILIO_LANG_SWITCH";
+        my $lang      = $1;
+        my $languages = C4::Languages::getTranslatedLanguages('opac');
+        my $old_lang;
+        my $new_lang;
+        foreach my $l (@$languages) {
+            $new_lang = $l
+                if lc $l->{language} eq lc $lang
+                || lc $l->{rfc4646_subtag} eq lc $lang
+                || lc $l->{native_description} eq lc $lang;
+            $old_lang = $l if $l->{rfc4646_subtag} eq $patron->lang;
+        }
 
-            $objects->{new_language} = $new_lang;
-            $objects->{old_language} = $old_lang;
+        $objects->{new_language} = $new_lang;
+        $objects->{old_language} = $old_lang;
 
-            $patron->update({lang => $new_lang->{rfc4646_subtag}}) if $new_lang;
+        $patron->update( { lang => $new_lang->{rfc4646_subtag} } ) if $new_lang;
+    } else {
+        $code = "TWILIO_NO_CMD";
+    }
+
+    my $template = Koha::Notice::Templates->find( { code => $code, lang => $lang } )
+        || Koha::Notice::Templates->find( { code => $code, lang => 'default' } );
+    my $template_content = $template->content;
+    warn "TABLES: " . Data::Dumper::Dumper($tables);
+    my $letter = C4::Letters::GetPreparedLetter(
+        module      => 'circulation',
+        letter_code => $code,
+        lang        => $lang,
+        tables      => $tables,
+        objects     => {
+            nothing => undef,    # Placeholder in case $tables and $objects are empty
+            %$objects,
+        },
+        message_transport_type => 'sms'
+    );
+    warn "LETTER: " . Data::Dumper::Dumper($letter);
+    $outgoing = $letter->{content};
+
+    # Twilio cannot auto-split messages over 1600 characters, so we need to split
+    # our message into 1600 character chunks and send each one separately.
+    # Twilio should then split those messages into 160 character chunks as well
+    my @chunks = unpack( "(A1500)*", $outgoing );
+    warn "OUTGOING: " . Data::Dumper::Dumper( \@chunks );
+
+    my $ua  = LWP::UserAgent->new;
+    my $url = "https://api.twilio.com/2010-04-01/Accounts/$AccountSid/Messages.json";
+
+    for my $chunk (@chunks) {
+        my $request = POST $url, [ From => $From, To => $To, Body => $chunk ];
+        $request->authorization_basic( $AccountSid, $AuthToken );
+        my $response = $ua->request($request);
+
+        if ( $response->is_success ) {
+            warn "RESPONSE: " . $response->decoded_content;
         } else {
-            $code = "TWILIO_NO_CMD";
+            warn "Twilio response indicates failure: " . $response->status_line;
         }
+    }
 
-        my $template = Koha::Notice::Templates->find({code => $code, lang => $lang})
-            || Koha::Notice::Templates->find({code => $code, lang => 'default'});
-        my $template_content = $template->content;
-        warn "TABLES: " . Data::Dumper::Dumper($tables);
-        my $letter = C4::Letters::GetPreparedLetter(
-            module      => 'circulation',
-            letter_code => $code,
-            lang        => $lang,
-            tables      => $tables,
-            objects     => {
-                nothing => undef,    # Placeholder in case $tables and $objects are empty
-                %$objects,
-            },
-            message_transport_type => 'sms'
-        );
-        warn "LETTER: " . Data::Dumper::Dumper($letter);
-        $outgoing = $letter->{content};
-
-        # Twilio cannot auto-split messages over 1600 characters, so we need to split
-        # our message into 1600 character chunks and send each one separately.
-        # Twilio should then split those messages into 160 character chunks as well
-        my @chunks = unpack("(A1500)*", $outgoing);
-        warn "OUTGOING: " . Data::Dumper::Dumper(\@chunks);
-
-        my $ua  = LWP::UserAgent->new;
-        my $url = "https://api.twilio.com/2010-04-01/Accounts/$AccountSid/Messages.json";
-
-        for my $chunk (@chunks) {
-            my $request = POST $url, [From => $From, To => $To, Body => $chunk];
-            $request->authorization_basic($AccountSid, $AuthToken);
-            my $response = $ua->request($request);
-
-            if ($response->is_success) {
-                warn "RESPONSE: " . $response->decoded_content;
-            } else {
-                warn "Twilio response indicates failure: " . $response->status_line;
-            }
-        }
-
-        return $c->render(status => 200, openapi => '<?xml version="1.0" encoding="UTF-8"?><Response></Response>',);
+    return $c->render( status => 200, openapi => '<?xml version="1.0" encoding="UTF-8"?><Response></Response>', );
 }
 
 1;

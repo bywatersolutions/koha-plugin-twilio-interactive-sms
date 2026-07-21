@@ -21,7 +21,7 @@ use Cwd qw(abs_path);
 use Data::Dumper;
 use LWP::UserAgent;
 use MARC::Record;
-use Mojo::JSON qw(decode_json);
+use Mojo::JSON  qw(decode_json);
 use URI::Escape qw(uri_unescape);
 
 ## Here we set our plugin version
@@ -37,7 +37,7 @@ our $metadata = {
     minimum_version => $MINIMUM_VERSION,
     maximum_version => undef,
     version         => $VERSION,
-    description => 'This plugin enables patrons to send sms messages to Koha and recieve responses via Twilio.',
+    description     => 'This plugin enables patrons to send sms messages to Koha and recieve responses via Twilio.',
 };
 
 sub new {
@@ -72,8 +72,7 @@ sub configure {
         );
 
         $self->output_html( $template->output() );
-    }
-    else {
+    } else {
         $self->store_data(
             {
                 AccountSid       => $cgi->param('AccountSid'),
