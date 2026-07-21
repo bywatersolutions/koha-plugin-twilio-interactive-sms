@@ -27,6 +27,9 @@ use Try::Tiny;
 use YAML::XS qw(Load);
 
 use C4::Circulation qw(CanBookBeRenewed AddRenewal _GetCircControlBranch);
+use C4::Context;
+
+use Koha::Notice::Messages;
 
 =head1 API
 
@@ -272,6 +275,57 @@ sub webhook {
     }
 
     return $c->render( status => 200, openapi => '<?xml version="1.0" encoding="UTF-8"?><Response></Response>', );
+}
+
+=head3 Method to handle delivery status callbacks from Twilio for outgoing SMS messages
+
+=cut
+
+sub update_message_status {
+    my $c = shift->openapi->valid_input or return;
+
+    return try {
+        my $plugin = Koha::Plugin::Com::ByWaterSolutions::TwilioSMS->new();
+
+        my $token            = $c->validation->param('token');
+        my $WebhookAuthToken = $plugin->retrieve_data('WebhookAuthToken');
+        unless ( $token && $WebhookAuthToken && $token eq $WebhookAuthToken ) {
+            return $c->render( status => 401, openapi => { error => "Invalid token" } );
+        }
+
+        my $message_id = $c->validation->param('message_id');
+        my $message    = Koha::Notice::Messages->find($message_id);
+        unless ($message) {
+            return $c->render( status => 404, openapi => { error => "Message not found." } );
+        }
+
+        my $params        = $c->req->params->to_hash;
+        my $MessageSid    = $params->{MessageSid};
+        my $MessageStatus = $params->{MessageStatus} // q{};
+        my $ErrorCode     = $params->{ErrorCode};
+
+        warn "TWILIO SMS: update_message_status(): " . Data::Dumper::Dumper($params);
+
+        # Only terminal failures change the message status in Koha, a message
+        # is marked sent when Twilio accepts it and stays sent when delivered
+        if ( $MessageStatus eq 'failed' || $MessageStatus eq 'undelivered' ) {
+            $message->status('failed');
+            $message->failure_code( $ErrorCode ? "Twilio $ErrorCode: $MessageStatus" : "Twilio: $MessageStatus" );
+            $message->store();
+        }
+
+        if ($MessageSid) {
+            my $table = $plugin->get_qualified_table_name('messages');
+            C4::Context->dbh->do(
+                qq{UPDATE $table SET twilio_status = ?, error_code = ? WHERE twilio_sid = ?},
+                undef, $MessageStatus, $ErrorCode, $MessageSid
+            );
+        }
+
+        return $c->render( status => 204, text => q{} );
+    } catch {
+        $c->unhandled_exception($_);
+    };
 }
 
 1;
