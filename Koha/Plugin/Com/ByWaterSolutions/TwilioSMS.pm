@@ -14,15 +14,22 @@ use Koha::Account::Lines;
 use Koha::Account;
 use Koha::DateUtils;
 use Koha::Libraries;
+use Koha::Notice::Messages;
 use Koha::Patron::Categories;
 use Koha::Patron;
+use Koha::Patrons;
 
 use Cwd qw(abs_path);
 use Data::Dumper;
+use Digest::SHA qw(sha256_hex);
+use Encode;
+use File::Spec;
+use HTTP::Request::Common;
 use LWP::UserAgent;
 use MARC::Record;
 use Mojo::JSON  qw(decode_json);
 use URI::Escape qw(uri_unescape);
+use YAML::XS;
 
 ## Here we set our plugin version
 our $VERSION         = "{VERSION}";
@@ -55,6 +62,155 @@ sub new {
     return $self;
 }
 
+sub before_send_messages {
+    my ( $self, $params ) = @_;
+
+    return unless $self->retrieve_data('EnableOutgoingSMS');
+
+    my $type        = $params->{type};
+    my $letter_code = $params->{letter_code};
+    my $where       = $params->{where};
+    my $message_id  = $params->{message_id};
+
+    # If a type limit is passed in, only run if the type is "sms"
+    return
+           if ref($type) eq 'ARRAY'
+        && scalar @$type > 0
+        && !grep( /^sms$/, @$type );
+    return if defined($type) && ref($type) eq q{} && $type ne q{} && $type ne 'sms';
+
+    # If this version of Koha sends an arrayref, check the length of it and set the var to false if it has no elements
+    $letter_code = undef if ref($letter_code) eq 'ARRAY' && scalar @$letter_code == 0;
+
+    my $AccountSid       = $self->retrieve_data('AccountSid');
+    my $AuthToken        = $self->retrieve_data('AuthToken');
+    my $From             = $self->retrieve_data('From');
+    my $WebhookAuthToken = $self->retrieve_data('WebhookAuthToken');
+
+    # Outgoing SMS notices can be sent from their own Twilio account,
+    # defaulting to the account the interactive features use
+    my $SmsServiceAccountSid = $self->retrieve_data('SmsServiceAccountSid') || $AccountSid;
+    my $SmsServiceAuthToken  = $self->retrieve_data('SmsServiceAuthToken')  || $AuthToken;
+
+    return unless $SmsServiceAccountSid && $SmsServiceAuthToken && $From;
+
+    my $dbh   = C4::Context->dbh;
+    my $table = $self->get_qualified_table_name('messages');
+
+    # Koha's own message queue processing runs after this hook and can grab any
+    # sms message queued in the moment between our search below and its own.
+    # With SMSSendDriver set to a placeholder those messages fail with a driver
+    # load error, so reset them to pending and they are picked up on this run.
+    $dbh->do(
+        q{
+        UPDATE message_queue
+        SET status = 'pending',
+            failure_code = NULL
+        WHERE status = 'failed'
+          AND message_transport_type = 'sms'
+          AND ( failure_code = 'SMS_SEND_DRIVER_MISSING'
+             OR failure_code LIKE '%does not exist, or is not installed%' )
+    }
+    );
+
+    my $parameters = { status => 'pending', message_transport_type => 'sms' };
+    $parameters->{letter_code} = $letter_code if $letter_code;
+    $parameters->{message_id}  = $message_id  if $message_id;
+    my $messages = Koha::Notice::Messages->search($parameters);
+    $messages = $messages->search( \$where ) if $where;
+
+    my $OPACBaseURL = C4::Context->preference('OPACBaseURL');
+
+    my $ua = LWP::UserAgent->new;
+
+    while ( my $m = $messages->next ) {
+
+        # Claim the message before Koha's own message queue processing searches for pending messages
+        $m->status('sent');
+        $m->update();
+
+        my $patron         = Koha::Patrons->find( $m->borrowernumber );
+        my $smsalertnumber = $patron ? $patron->smsalertnumber : undef;
+
+        unless ($smsalertnumber) {
+            $m->status('failed');
+            $m->failure_code('MISSING_SMS');
+            $m->update();
+            next;
+        }
+
+        $m->to_address($smsalertnumber);
+        $m->update();
+
+        # The same duplicate check Koha's _send_message_by_sms does, excluding
+        # this message which we have already marked sent to claim it
+        my $is_duplicate = $dbh->selectrow_array(
+            q{
+            SELECT COUNT(*)
+            FROM message_queue
+            WHERE message_transport_type = ?
+            AND borrowernumber = ?
+            AND letter_code = ?
+            AND CAST(updated_on AS date) = CAST(NOW() AS date)
+            AND status="sent"
+            AND content = ?
+            AND message_id != ?
+        }, {}, 'sms', $m->borrowernumber, $m->letter_code, $m->content, $m->id
+        );
+        if ($is_duplicate) {
+            $m->status('failed');
+            $m->failure_code('DUPLICATE_MESSAGE');
+            $m->update();
+            next;
+        }
+
+        my $to = $self->_normalize_phone_number($smsalertnumber);
+
+        my $message_id = $m->id;
+        my $status_callback_url =
+            "$OPACBaseURL/api/v1/contrib/twiliosms/message/$message_id/status?token=$WebhookAuthToken";
+
+        # Twilio cannot auto-split messages over 1600 characters, so we need to split
+        # our message into 1600 character chunks and send each one separately.
+        # Twilio should then split those messages into 160 character chunks as well
+        my @chunks = $m->content =~ /(.{1,1600})/sg;
+
+        my $url = "https://api.twilio.com/2010-04-01/Accounts/$SmsServiceAccountSid/Messages.json";
+
+        for my $chunk (@chunks) {
+            my @form = (
+                To             => $to,
+                From           => $From,
+                Body           => Encode::encode_utf8($chunk),
+                StatusCallback => $status_callback_url,
+            );
+
+            my $request = POST $url, \@form;
+            $request->authorization_basic( $SmsServiceAccountSid, $SmsServiceAuthToken );
+            my $response = $ua->request($request);
+
+            my $data = eval { decode_json( $response->decoded_content ) };
+
+            if ( $response->is_success ) {
+                $dbh->do(
+                    qq{INSERT INTO $table ( twilio_sid, message_id, to_address, twilio_status ) VALUES ( ?, ?, ?, ? )},
+                    undef, $data->{sid}, $m->id, $to, $data->{status}
+                ) if $data && $data->{sid};
+            } else {
+                warn "Twilio response indicates failure: " . $response->status_line;
+                my $failure_code =
+                    $data && $data->{code}
+                    ? "Twilio " . $data->{code} . ": " . $data->{message}
+                    : "Twilio: " . $response->status_line;
+                $m->status('failed');
+                $m->failure_code($failure_code);
+                $m->update();
+                last;
+            }
+        }
+    }
+}
+
 sub configure {
     my ( $self, $args ) = @_;
     my $cgi = $self->{'cgi'};
@@ -64,22 +220,30 @@ sub configure {
 
         ## Grab the values we already have for our settings, if any exist
         $template->param(
-            AccountSid       => $self->retrieve_data('AccountSid'),
-            AuthToken        => $self->retrieve_data('AuthToken'),
-            From             => $self->retrieve_data('From'),
-            KeywordRegExes   => $self->retrieve_data('KeywordRegExes'),
-            WebhookAuthToken => $self->retrieve_data('WebhookAuthToken'),
+            AccountSid           => $self->retrieve_data('AccountSid'),
+            AuthToken            => $self->retrieve_data('AuthToken'),
+            From                 => $self->retrieve_data('From'),
+            SmsServiceAccountSid => $self->retrieve_data('SmsServiceAccountSid'),
+            SmsServiceAuthToken  => $self->retrieve_data('SmsServiceAuthToken'),
+            EnableOutgoingSMS    => $self->retrieve_data('EnableOutgoingSMS'),
+            RetentionDays        => $self->retrieve_data('RetentionDays'),
+            KeywordRegExes       => $self->retrieve_data('KeywordRegExes'),
+            WebhookAuthToken     => $self->retrieve_data('WebhookAuthToken'),
         );
 
         $self->output_html( $template->output() );
     } else {
         $self->store_data(
             {
-                AccountSid       => $cgi->param('AccountSid'),
-                AuthToken        => $cgi->param('AuthToken'),
-                From             => $cgi->param('From'),
-                KeywordRegExes   => $cgi->param('KeywordRegExes'),
-                WebhookAuthToken => $cgi->param('WebhookAuthToken'),
+                AccountSid           => $cgi->param('AccountSid'),
+                AuthToken            => $cgi->param('AuthToken'),
+                From                 => $cgi->param('From'),
+                SmsServiceAccountSid => $cgi->param('SmsServiceAccountSid'),
+                SmsServiceAuthToken  => $cgi->param('SmsServiceAuthToken'),
+                EnableOutgoingSMS    => $cgi->param('EnableOutgoingSMS') ? 1 : 0,
+                RetentionDays        => $cgi->param('RetentionDays'),
+                KeywordRegExes       => $cgi->param('KeywordRegExes'),
+                WebhookAuthToken     => $cgi->param('WebhookAuthToken'),
             }
         );
         $self->go_home();
@@ -89,8 +253,10 @@ sub configure {
 sub install() {
     my ( $self, $args ) = @_;
 
+    $self->_setup();
+
     my $sql = q{
- INSERT INTO `letter` ( id, module, code, branchcode, name, is_html, title, content, message_transport_type, lang, updated_on )
+ INSERT IGNORE INTO `letter` ( id, module, code, branchcode, name, is_html, title, content, message_transport_type, lang, updated_on )
 VALUES      (NULL,
              'circulation',
              'TWILIO_CHECKOUTS_CUR',
@@ -267,11 +433,91 @@ VALUES      (NULL,
 sub upgrade {
     my ( $self, $args ) = @_;
 
+    $self->_setup();
+
     return 1;
 }
 
 sub uninstall() {
     my ( $self, $args ) = @_;
+
+    return 1;
+}
+
+sub cronjob_nightly {
+    my ($self) = @_;
+
+    my $retention_days = $self->retrieve_data('RetentionDays') || 90;
+    my $table          = $self->get_qualified_table_name('messages');
+
+    C4::Context->dbh->do(
+        qq{DELETE FROM $table WHERE created_on < NOW() - INTERVAL ? DAY},
+        undef, $retention_days
+    );
+}
+
+sub _normalize_phone_number {
+    my ( $self, $number ) = @_;
+
+    # Keep a leading + but strip all other formatting
+    my $has_plus = $number =~ m/^\s*\+/;
+    my $digits   = $number;
+    $digits =~ s/[^0-9]//g;
+
+    # Already in international format
+    return "+$digits" if $has_plus && $digits;
+
+    # NANP numbers are 10 digits, or 11 digits with a leading country code of 1
+    return "+1$digits" if length($digits) == 10;
+    return "+$digits"  if length($digits) == 11 && substr( $digits, 0, 1 ) eq '1';
+
+    # Anything else is passed through untouched for Twilio to validate
+    return $number;
+}
+
+sub _setup {
+    my ($self) = @_;
+
+    my $table = $self->get_qualified_table_name('messages');
+
+    C4::Context->dbh->do(
+        qq{
+        CREATE TABLE IF NOT EXISTS $table (
+            `id` INT(11) NOT NULL AUTO_INCREMENT,
+            `twilio_sid` VARCHAR(34) NOT NULL,
+            `message_id` INT(11) NULL DEFAULT NULL,
+            `to_address` VARCHAR(64) NULL DEFAULT NULL,
+            `twilio_status` VARCHAR(24) NULL DEFAULT NULL,
+            `error_code` INT(11) NULL DEFAULT NULL,
+            `created_on` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            `updated_on` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            PRIMARY KEY (`id`),
+            UNIQUE KEY `twilio_sid` (`twilio_sid`),
+            KEY `message_id` (`message_id`),
+            KEY `created_on` (`created_on`)
+        ) ENGINE = INNODB;
+    }
+    );
+
+    # Import credentials from the SMS::Send::Twilio driver config this plugin replaces
+    my $sms_send_config = C4::Context->config('sms_send_config');
+    if ($sms_send_config) {
+        my $conf_file = File::Spec->catfile( $sms_send_config, 'Twilio.yaml' );
+        if ( -f $conf_file ) {
+            my $conf = eval { YAML::XS::LoadFile($conf_file) };
+            if ($conf) {
+                $self->store_data( { AccountSid => $conf->{accountsid} } )
+                    if $conf->{accountsid} && !$self->retrieve_data('AccountSid');
+                $self->store_data( { AuthToken => $conf->{authtoken} } )
+                    if $conf->{authtoken} && !$self->retrieve_data('AuthToken');
+                $self->store_data( { From => $conf->{from} } )
+                    if $conf->{from} && !$self->retrieve_data('From');
+            }
+        }
+    }
+
+    $self->store_data( { WebhookAuthToken => sha256_hex( time . $$ . rand ) } )
+        unless $self->retrieve_data('WebhookAuthToken');
 
     return 1;
 }

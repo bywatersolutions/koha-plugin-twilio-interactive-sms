@@ -42,6 +42,32 @@
 			</div>
 
 			<div class="form-group">
+				<label for="SmsServiceAccountSid">SMS Service Account SID:</label>
+				<input type="text" class="form-control" name="SmsServiceAccountSid" value="[% SmsServiceAccountSid %]"/>
+				<div class="hint">Optional. Outgoing SMS notices are sent from this Twilio account. Defaults to the Account SID above if empty.</div>
+			</div>
+
+			<div class="form-group">
+				<label for="SmsServiceAuthToken">SMS Service Auth Token:</label>
+				<input type="text" class="form-control" name="SmsServiceAuthToken" value="[% SmsServiceAuthToken %]"/>
+				<div class="hint">Optional. Auth token for the SMS Service Account SID. Defaults to the Auth Token above if empty.</div>
+			</div>
+
+			<div class="form-group">
+				<label for="EnableOutgoingSMS">
+					<input type="checkbox" name="EnableOutgoingSMS" value="1" [% IF EnableOutgoingSMS %]checked="checked"[% END %]/>
+					Enable outgoing SMS notices
+				</label>
+				<div class="hint">If enabled, this plugin sends Koha's queued sms notices via Twilio, replacing the SMS::Send driver. Set the SMSSendDriver system preference to "TwilioSMSPlugin" so Koha's own SMS sending stays out of the way while patrons can still choose SMS in their messaging preferences.</div>
+			</div>
+
+			<div class="form-group">
+				<label for="RetentionDays">Days to retain delivery status data:</label>
+				<input type="text" class="form-control" name="RetentionDays" value="[% RetentionDays %]"/>
+				<div class="hint">Twilio message ids and delivery statuses older than this are purged nightly. Default is 90 days.</div>
+			</div>
+
+			<div class="form-group">
 				<label for="WebhookAuthToken">Webhook Auth Token:</label>
 				<input type="text" class="form-control" name="WebhookAuthToken" id="WebhookAuthToken" value="[% WebhookAuthToken %]"/>
                 <div class="hint">You will add this token to the HTTP POST Webhook URL you configure within Twilio.</div>
