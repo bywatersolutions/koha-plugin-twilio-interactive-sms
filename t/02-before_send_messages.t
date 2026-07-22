@@ -77,12 +77,14 @@ t::lib::Mocks::mock_preference( 'OPACBaseURL', 'http://opac.test' );
 
 $plugin->store_data(
     {
-        EnableOutgoingSMS   => 1,
-        AccountSid          => 'ACtest',
-        AuthToken           => 'testtoken',
-        From                => '+15005550006',
-        MessagingServiceSid => q{},
-        WebhookAuthToken    => 'sekrit',
+        EnableOutgoingSMS    => 1,
+        AccountSid           => 'ACtest',
+        AuthToken            => 'testtoken',
+        From                 => '+15005550006',
+        SmsServiceAccountSid => q{},
+        SmsServiceAuthToken  => q{},
+        SmsServiceFrom       => q{},
+        WebhookAuthToken     => 'sekrit',
     }
 );
 
@@ -215,11 +217,17 @@ subtest 'happy path' => sub {
     );
 };
 
-subtest 'SmsService credentials are used when set, default to the main credentials' => sub {
-    plan tests => 4;
+subtest 'SmsService settings are used when set, default to the main settings' => sub {
+    plan tests => 6;
 
     @requests = ();
-    $plugin->store_data( { SmsServiceAccountSid => 'ACsmsservice', SmsServiceAuthToken => 'smsservicetoken' } );
+    $plugin->store_data(
+        {
+            SmsServiceAccountSid => 'ACsmsservice',
+            SmsServiceAuthToken  => 'smsservicetoken',
+            SmsServiceFrom       => '+15005559999',
+        }
+    );
 
     my $patron = build_patron();
     build_message( { patron => $patron } );
@@ -233,8 +241,13 @@ subtest 'SmsService credentials are used when set, default to the main credentia
         'request authenticated with the SmsService credentials'
     );
 
+    my $uri = URI->new('http://x');
+    $uri->query( $send->content );
+    my %form = $uri->query_form;
+    is( $form{From}, '+15005559999', 'SmsServiceFrom used as the From number' );
+
     @requests = ();
-    $plugin->store_data( { SmsServiceAccountSid => q{}, SmsServiceAuthToken => q{} } );
+    $plugin->store_data( { SmsServiceAccountSid => q{}, SmsServiceAuthToken => q{}, SmsServiceFrom => q{} } );
 
     build_message( { patron => $patron } );
     $plugin->before_send_messages( {} );
@@ -246,6 +259,11 @@ subtest 'SmsService credentials are used when set, default to the main credentia
         'Basic ' . MIME::Base64::encode_base64( 'ACtest:testtoken', q{} ),
         'request authenticated with the main credentials when SmsService credentials unset'
     );
+
+    $uri = URI->new('http://x');
+    $uri->query( $send->content );
+    %form = $uri->query_form;
+    is( $form{From}, '+15005550006', 'From used as the From number when SmsServiceFrom unset' );
 };
 
 subtest 'missing smsalertnumber' => sub {

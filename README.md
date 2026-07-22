@@ -21,7 +21,7 @@ Each outgoing message includes a status callback URL, so Twilio reports delivery
 
 Notes:
 * The status callback URL is built from the OPACBaseURL system preference: `<OPACBaseURL>/api/v1/contrib/twiliosms/message/<id>/status`. If the OPAC sits behind Cloudflare or another WAF, add a rule allowing POSTs to `/api/v1/contrib/twiliosms/` or the callbacks will be blocked.
-* Outgoing SMS notices can be sent from their own Twilio account by setting the SMS Service Account SID and SMS Service Auth Token. Both default to the main Account SID and Auth Token if empty.
+* Outgoing SMS notices can be sent from their own Twilio account and phone number by setting the SMS Service Account SID, SMS Service Auth Token, and SMS Service Phone Number. All three default to the main Account SID, Auth Token, and From Phone Number if empty.
 * Patron phone numbers are normalized to E.164 format before sending. Numbers already in international format keep their country code, bare 10 and 11 digit NANP numbers get a +1 prefix, and anything else is passed to Twilio as-is for validation.
 
 ## Interactive SMS

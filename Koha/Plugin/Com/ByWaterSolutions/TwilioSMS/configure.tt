@@ -71,6 +71,12 @@
 			</div>
 
 			<div class="form-group">
+				<label for="SmsServiceFrom">SMS Service Phone Number:</label>
+				<input type="text" class="form-control" name="SmsServiceFrom" value="[% SmsServiceFrom %]"/>
+				<div class="hint">Optional. Outgoing SMS notices are sent from this phone number. Defaults to the From Phone Number above if empty.</div>
+			</div>
+
+			<div class="form-group">
 				<label for="RetentionDays">Days to retain delivery status data:</label>
 				<input type="text" class="form-control" name="RetentionDays" value="[% RetentionDays %]"/>
 				<div class="hint">Twilio message ids and delivery statuses older than this are purged nightly. Default is 90 days.</div>

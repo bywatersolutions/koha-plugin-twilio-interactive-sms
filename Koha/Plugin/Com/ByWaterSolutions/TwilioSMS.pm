@@ -88,12 +88,13 @@ sub before_send_messages {
     my $From             = $self->retrieve_data('From');
     my $WebhookAuthToken = $self->retrieve_data('WebhookAuthToken');
 
-    # Outgoing SMS notices can be sent from their own Twilio account,
-    # defaulting to the account the interactive features use
+    # Outgoing SMS notices can be sent from their own Twilio account and
+    # phone number, defaulting to the ones the interactive features use
     my $SmsServiceAccountSid = $self->retrieve_data('SmsServiceAccountSid') || $AccountSid;
     my $SmsServiceAuthToken  = $self->retrieve_data('SmsServiceAuthToken')  || $AuthToken;
+    my $SmsServiceFrom       = $self->retrieve_data('SmsServiceFrom')       || $From;
 
-    return unless $SmsServiceAccountSid && $SmsServiceAuthToken && $From;
+    return unless $SmsServiceAccountSid && $SmsServiceAuthToken && $SmsServiceFrom;
 
     my $dbh   = C4::Context->dbh;
     my $table = $self->get_qualified_table_name('messages');
@@ -181,7 +182,7 @@ sub before_send_messages {
         for my $chunk (@chunks) {
             my @form = (
                 To             => $to,
-                From           => $From,
+                From           => $SmsServiceFrom,
                 Body           => Encode::encode_utf8($chunk),
                 StatusCallback => $status_callback_url,
             );
@@ -239,6 +240,7 @@ sub configure {
             From                 => $self->retrieve_data('From'),
             SmsServiceAccountSid => $self->retrieve_data('SmsServiceAccountSid'),
             SmsServiceAuthToken  => $self->retrieve_data('SmsServiceAuthToken'),
+            SmsServiceFrom       => $self->retrieve_data('SmsServiceFrom'),
             EnableOutgoingSMS    => $self->retrieve_data('EnableOutgoingSMS'),
             RetentionDays        => $self->retrieve_data('RetentionDays'),
             KeywordRegExes       => $self->retrieve_data('KeywordRegExes'),
@@ -254,6 +256,7 @@ sub configure {
                 From                 => $cgi->param('From'),
                 SmsServiceAccountSid => $cgi->param('SmsServiceAccountSid'),
                 SmsServiceAuthToken  => $cgi->param('SmsServiceAuthToken'),
+                SmsServiceFrom       => $cgi->param('SmsServiceFrom'),
                 EnableOutgoingSMS    => $cgi->param('EnableOutgoingSMS') ? 1 : 0,
                 RetentionDays        => $cgi->param('RetentionDays'),
                 KeywordRegExes       => $cgi->param('KeywordRegExes'),
