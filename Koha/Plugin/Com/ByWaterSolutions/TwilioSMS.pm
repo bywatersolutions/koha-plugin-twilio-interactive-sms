@@ -24,11 +24,11 @@ use Data::Dumper;
 use Digest::SHA qw(sha256_hex);
 use Encode;
 use File::Spec;
-use HTTP::Request::Common;
+use HTTP::Request;
 use LWP::UserAgent;
 use MARC::Record;
 use Mojo::JSON  qw(decode_json);
-use URI::Escape qw(uri_unescape);
+use URI::Escape qw(uri_escape uri_unescape);
 use YAML::XS;
 
 ## Here we set our plugin version
@@ -186,7 +186,20 @@ sub before_send_messages {
                 StatusCallback => $status_callback_url,
             );
 
-            my $request = POST $url, \@form;
+            # Build the form body ourselves. URI versions differ on whether
+            # query_form converts newlines to CRLF, which inflates the body
+            # past Twilio's 1600 character limit for a full length chunk
+            my @pairs;
+            while (@form) {
+                my ( $key, $value ) = splice( @form, 0, 2 );
+                push @pairs, uri_escape($key) . '=' . uri_escape($value);
+            }
+
+            my $request = HTTP::Request->new(
+                'POST', $url,
+                [ 'Content-Type' => 'application/x-www-form-urlencoded' ],
+                join( '&', @pairs )
+            );
             $request->authorization_basic( $SmsServiceAccountSid, $SmsServiceAuthToken );
             my $response = $ua->request($request);
 
