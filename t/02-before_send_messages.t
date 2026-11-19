@@ -23,7 +23,7 @@ BEGIN {
     unshift( @INC, '/kohadevbox/koha/t/lib' );
 }
 
-use Test::More tests => 11;
+use Test::More tests => 12;
 use Test::NoWarnings;
 use Test::MockModule;
 
@@ -384,6 +384,39 @@ subtest 'letter_code and message_id filters are honored' => sub {
     $plugin->before_send_messages( { message_id => $checkout->id } );
     is( $checkout->discard_changes->status, 'sent',    'message matching message_id filter sent' );
     is( $other->discard_changes->status,    'pending', 'message not matching message_id filter untouched' );
+
+    # Consume the leftover
+    $plugin->before_send_messages( {} );
+};
+
+subtest 'single message runs skip other transports and the queue maintenance' => sub {
+    plan tests => 6;
+
+    @requests = ();
+    my $patron  = build_patron();
+    my $pending = build_message( { patron => $patron } );
+    my $missing = build_message( { patron => $patron, status => 'failed', failure_code => 'SMS_SEND_DRIVER_MISSING' } );
+    my $email   = Koha::Notice::Message->new(
+        {
+            borrowernumber         => $patron->id,
+            subject                => 'Password reset',
+            content                => 'Reset your password',
+            letter_code            => 'PASSWORD_RESET',
+            message_transport_type => 'email',
+            status                 => 'pending',
+            time_queued            => \'NOW()',
+        }
+    )->store;
+
+    $plugin->before_send_messages( { message_id => $email->id } );
+    is( $email->discard_changes->status,   'pending', 'email message left for Koha to send' );
+    is( $pending->discard_changes->status, 'pending', 'pending sms message untouched' );
+    is( $missing->discard_changes->status, 'failed',  'driver load failure not reset when sending a single email' );
+    is( scalar @requests,                  0,         'no requests sent to Twilio' );
+
+    $plugin->before_send_messages( { message_id => $pending->id } );
+    is( $pending->discard_changes->status, 'sent',   'single sms message sent' );
+    is( $missing->discard_changes->status, 'failed', 'driver load failure not reset when sending a single sms' );
 
     # Consume the leftover
     $plugin->before_send_messages( {} );

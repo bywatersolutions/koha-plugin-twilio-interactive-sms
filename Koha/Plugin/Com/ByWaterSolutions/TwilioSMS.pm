@@ -80,6 +80,12 @@ sub before_send_messages {
         && !grep( /^sms$/, @$type );
     return if defined($type) && ref($type) eq q{} && $type ne q{} && $type ne 'sms';
 
+    # A single message is being sent right away, e.g. a password reset email, so there is nothing to do unless it is an sms
+    if ($message_id) {
+        my $message = Koha::Notice::Messages->find($message_id);
+        return unless $message && $message->message_transport_type eq 'sms';
+    }
+
     # If this version of Koha sends an arrayref, check the length of it and set the var to false if it has no elements
     $letter_code = undef if ref($letter_code) eq 'ARRAY' && scalar @$letter_code == 0;
 
@@ -103,6 +109,7 @@ sub before_send_messages {
     # sms message queued in the moment between our search below and its own.
     # With SMSSendDriver set to a placeholder those messages fail with a driver
     # load error, so reset them to pending and they are picked up on this run.
+    # This scans the whole message queue, so it is left to the full runs.
     $dbh->do(
         q{
         UPDATE message_queue
@@ -113,7 +120,7 @@ sub before_send_messages {
           AND ( failure_code = 'SMS_SEND_DRIVER_MISSING'
              OR failure_code LIKE '%does not exist, or is not installed%' )
     }
-    );
+    ) unless $message_id;
 
     my $parameters = { status => 'pending', message_transport_type => 'sms' };
     $parameters->{letter_code} = $letter_code if $letter_code;
