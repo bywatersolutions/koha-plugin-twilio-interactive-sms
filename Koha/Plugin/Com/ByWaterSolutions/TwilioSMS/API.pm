@@ -27,7 +27,7 @@ use Mojo::JSON qw(decode_json);
 use Try::Tiny;
 use YAML::XS qw(Load);
 
-use C4::Circulation qw(CanBookBeRenewed AddRenewal _GetCircControlBranch);
+use C4::Circulation qw(CanBookBeRenewed AddRenewal);
 use C4::Context;
 
 use Koha::Notice::Messages;
@@ -156,7 +156,7 @@ sub webhook {
                     {
                         borrowernumber => $patron->id,
                         itemnumber     => $item->id,
-                        branch         => _GetCircControlBranch( $item, $patron )
+                        branch         => _circ_control_library( $item, $patron )
                     }
                 );
                 $objects->{renewal_due_date} = $due_date;
@@ -190,7 +190,7 @@ sub webhook {
                             {
                                 borrowernumber => $patron->id,
                                 itemnumber     => $item->id,
-                                branch         => _GetCircControlBranch( $item, $patron )
+                                branch         => _circ_control_library( $item, $patron )
                             }
                         );
                         $data->{renewal_due_date} = $due_date;
@@ -327,6 +327,22 @@ sub update_message_status {
     } catch {
         $c->unhandled_exception($_);
     };
+}
+
+=head3 _circ_control_library
+
+Returns the branchcode of the library whose circulation rules apply to a renewal
+
+=cut
+
+sub _circ_control_library {
+    my ( $item, $patron ) = @_;
+
+    # Koha 26.11 replaced C4::Circulation::_GetCircControlBranch with Koha::Policy::Circulation ( Bug 42385 )
+    return Koha::Policy::Circulation->circ_control_library( $item, $patron )
+        if eval { require Koha::Policy::Circulation; 1 };
+
+    return C4::Circulation::_GetCircControlBranch( $item, $patron );
 }
 
 1;

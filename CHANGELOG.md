@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - Emails Koha sends right away, such as password reset and password change emails, are no longer slowed down by the plugin checking the whole notice queue first ( several seconds per email on large sites )
+- The plugin's web services ( interactive SMS replies and delivery status updates from Twilio ) no longer fail to load on Koha 26.11
 
 ## [2.1.43] - 2021-03-01
 ### Changed
